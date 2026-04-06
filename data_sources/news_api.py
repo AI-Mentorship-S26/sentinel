@@ -1,22 +1,8 @@
-"""TheNewsAPI data source + preprocessing for port-congestion project.
-
-Usage:
-    export THENEWS_API_TOKEN='your_token_here'
-    python news_api.py --search 'port congestion OR shipping OR freight' --limit 50 --save-csv processed_news.csv
-
-This file is designed so the team can keep one file per data source.
-The main function to call from elsewhere is:
-    get_processed_news_data(...)
-which returns a pandas DataFrame of standardized, processed news data.
-"""
-# insert API_TOKEN = "your_real_api_key_here"
-#change token = api_token or API_TOKEN or os.getenv("THENEWS_API_TOKEN")
-
 from __future__ import annotations
+
 from dotenv import load_dotenv
 load_dotenv()
 
-import argparse
 import os
 import re
 from dataclasses import dataclass
@@ -26,80 +12,114 @@ import pandas as pd
 import requests
 
 
-BASE_URL = "https://api.thenewsapi.com/v1/news/all"
-DEFAULT_SEARCH = (
-    '"port congestion" | port | shipping | freight | logistics | container | '
-    'vessel | customs | backlog | strike | terminal | harbor'
-)
-DEFAULT_SEARCH_FIELDS = "title,description,keywords,main_text"
+BASE_URL = "https://newsapi.org/v2/everything"
 DEFAULT_LANGUAGE = "en"
-DEFAULT_CATEGORIES = "business"
+DEFAULT_SORT_BY = "publishedAt"
 DEFAULT_TIMEOUT = 30
+DEFAULT_PAGE_SIZE = 100
+PORTS_CSV_PATH = "ports.csv"
+
+EXCLUDE_KEYWORDS = [
+    "usb port",
+    "charging port",
+    "computer port",
+    "software port",
+    "video game port",
+    "port wine",
+    "airport",
+]
+
+PORT_WORDS = [
+    "port", "ports", "seaport", "harbor", "harbour",
+    "terminal", "container terminal", "dock", "cargo port"
+]
+
+MARITIME_WORDS = [
+    "maritime", "shipping", "vessel", "ship", "cargo", "freight", "container"
+]
+
+CRIME_WORDS = [
+    "smuggling", "piracy", "trafficking", "contraband",
+    "cargo theft", "customs fraud", "illegal fishing",
+    "sanctions evasion", "drug bust", "arms trafficking", "maritime crime"
+]
+
+TRADE_WORDS = [
+    "trade", "import", "export", "logistics",
+    "supply chain", "shipment", "container traffic",
+    "port congestion", "customs"
+]
 
 
-class TheNewsAPIError(Exception):
-    """Raised when TheNewsAPI returns an error or an invalid response."""
+class NewsAPIError(Exception):
+    pass
 
 
 @dataclass
-class TheNewsAPIClient:
-    api_token: str
+class NewsAPIClient:
+    api_key: str
     timeout: int = DEFAULT_TIMEOUT
 
     def fetch_all_news(
         self,
-        search: str = DEFAULT_SEARCH,
+        search: str,
         *,
-        search_fields: str = DEFAULT_SEARCH_FIELDS,
         language: str = DEFAULT_LANGUAGE,
-        categories: Optional[str] = DEFAULT_CATEGORIES,
-        exclude_categories: Optional[str] = None,
-        locale: Optional[str] = None,
-        domains: Optional[str] = None,
-        exclude_domains: Optional[str] = None,
-        published_after: Optional[str] = None,
-        published_before: Optional[str] = None,
-        limit: int = 50,
+        sort_by: str = DEFAULT_SORT_BY,
+        page_size: int = DEFAULT_PAGE_SIZE,
         page: int = 1,
     ) -> Dict[str, Any]:
-        """Fetch raw news JSON from TheNewsAPI all-news endpoint."""
-        params: Dict[str, Any] = {
-            "api_token": self.api_token,
-            "search": search,
-            "search_fields": search_fields,
+        params = {
+            "q": search,
             "language": language,
-            "limit": int(limit),
+            "sortBy": sort_by,
+            "pageSize": int(page_size),
             "page": int(page),
+            "apiKey": self.api_key,
         }
-
-        optional_params = {
-            "categories": categories,
-            "exclude_categories": exclude_categories,
-            "locale": locale,
-            "domains": domains,
-            "exclude_domains": exclude_domains,
-            "published_after": published_after,
-            "published_before": published_before,
-        }
-        params.update({k: v for k, v in optional_params.items() if v not in (None, "")})
 
         response = requests.get(BASE_URL, params=params, timeout=self.timeout)
 
         try:
             payload = response.json()
         except ValueError as exc:
-            raise TheNewsAPIError(f"Non-JSON response from API (status {response.status_code}).") from exc
+            raise NewsAPIError(f"Non-JSON response from API (status {response.status_code}).") from exc
 
         if not response.ok:
-            error = payload.get("error", {}) if isinstance(payload, dict) else {}
-            code = error.get("code", "unknown_error")
-            message = error.get("message", "Unknown API error")
-            raise TheNewsAPIError(f"API request failed ({response.status_code}) [{code}]: {message}")
+            code = payload.get("code", "unknown_error") if isinstance(payload, dict) else "unknown_error"
+            message = payload.get("message", "Unknown API error") if isinstance(payload, dict) else "Unknown API error"
+            raise NewsAPIError(f"API request failed ({response.status_code}) [{code}]: {message}")
 
-        if not isinstance(payload, dict) or "data" not in payload:
-            raise TheNewsAPIError("Unexpected API response format: missing 'data'.")
+        if not isinstance(payload, dict) or "articles" not in payload:
+            raise NewsAPIError("Unexpected API response format: missing 'articles'.")
 
         return payload
+
+
+def load_ports(csv_path: str = PORTS_CSV_PATH) -> pd.DataFrame:
+    return pd.read_csv(csv_path)
+
+
+def get_port_info(port_name: str, csv_path: str = PORTS_CSV_PATH) -> Dict[str, Any]:
+    ports_df = load_ports(csv_path)
+    matches = ports_df[ports_df["port_name"].str.lower() == port_name.lower()].copy()
+
+    if matches.empty:
+        raise ValueError(f"Port '{port_name}' not found in {csv_path}")
+
+    return matches.iloc[0].to_dict()
+
+
+def build_port_news_query(port_name: str) -> str:
+    return (
+        f'"{port_name}" AND '
+        f'('
+        f'"port congestion" OR "container terminal" OR seaport OR harbor OR harbour OR '
+        f'"cargo theft" OR smuggling OR piracy OR contraband OR "customs fraud" OR '
+        f'"port trade" OR "port exports" OR "port imports" OR "container traffic" OR '
+        f'"shipping" OR "maritime" OR "logistics"'
+        f')'
+    )
 
 
 def _safe_text(value: Any) -> str:
@@ -131,60 +151,135 @@ def _clean_text_for_model(*parts: Any) -> str:
     return _normalize_whitespace(joined)
 
 
-def _standardize_article(article: Dict[str, Any], search_term: str) -> Dict[str, Any]:
-    categories = _safe_list(article.get("categories"))
-    keywords = _safe_text(article.get("keywords"))
+def contains_any(text: str, words: List[str]) -> bool:
+    return any(word in text for word in words)
 
-    standardized = {
-        "uuid": _safe_text(article.get("uuid")),
-        "source": _safe_text(article.get("source")),
-        "title": _safe_text(article.get("title")),
-        "description": _safe_text(article.get("description")),
-        "snippet": _safe_text(article.get("snippet")),
-        "keywords": keywords,
-        "url": _safe_text(article.get("url")),
-        "image_url": _safe_text(article.get("image_url")),
-        "language": _safe_text(article.get("language")),
-        "locale": _safe_text(article.get("locale")),
-        "categories": categories,
-        "categories_str": ", ".join(categories),
-        "published_at": _safe_text(article.get("published_at")),
-        "search_term": search_term,
-    }
 
-    standardized["clean_text"] = _clean_text_for_model(
-        standardized["title"],
-        standardized["description"],
-        standardized["snippet"],
-        standardized["keywords"],
-        standardized["categories_str"],
+def find_all_matches(text: str, words: List[str]) -> List[str]:
+    return [word for word in words if word in text]
+
+
+def classify_article_strong(text: str) -> List[str]:
+    categories = []
+
+    has_port = contains_any(text, PORT_WORDS)
+    has_maritime = contains_any(text, MARITIME_WORDS)
+    has_crime = contains_any(text, CRIME_WORDS)
+    has_trade = contains_any(text, TRADE_WORDS)
+
+    if has_port and (has_maritime or has_trade):
+        categories.append("ports")
+
+    if has_crime and (has_port or has_maritime):
+        categories.append("maritime_crime")
+
+    if has_trade and has_port:
+        categories.append("trade_at_ports")
+
+    return categories
+
+
+def relevance_score(text: str) -> int:
+    port_hits = len(find_all_matches(text, PORT_WORDS))
+    maritime_hits = len(find_all_matches(text, MARITIME_WORDS))
+    crime_hits = len(find_all_matches(text, CRIME_WORDS))
+    trade_hits = len(find_all_matches(text, TRADE_WORDS))
+
+    return (2 * port_hits) + (1 * maritime_hits) + (3 * crime_hits) + (2 * trade_hits)
+
+
+def _is_excluded(text: str) -> bool:
+    return any(keyword in text for keyword in EXCLUDE_KEYWORDS)
+
+
+def _is_valid_article(article: Dict[str, Any]) -> bool:
+    return bool(article.get("title")) and bool(article.get("url")) and bool(
+        article.get("description") or article.get("content")
     )
 
-    return standardized
+
+def _standardize_article(article: Dict[str, Any], port_name: str, search_term: str) -> Optional[Dict[str, Any]]:
+    if not _is_valid_article(article):
+        return None
+
+    source_name = _safe_text(article.get("source", {}).get("name"))
+    title = _safe_text(article.get("title"))
+    description = _safe_text(article.get("description"))
+    content = _safe_text(article.get("content"))
+    author = _safe_text(article.get("author"))
+
+    clean_text = _clean_text_for_model(title, description, content)
+    lowered_text = clean_text.lower()
+
+    if _is_excluded(lowered_text):
+        return None
+
+    matched_keywords = (
+        find_all_matches(lowered_text, PORT_WORDS)
+        + find_all_matches(lowered_text, MARITIME_WORDS)
+        + find_all_matches(lowered_text, CRIME_WORDS)
+        + find_all_matches(lowered_text, TRADE_WORDS)
+    )
+
+    assigned_categories = classify_article_strong(lowered_text)
+    score = relevance_score(lowered_text)
+
+    if not assigned_categories or score < 3:
+        return None
+
+    return {
+        "port_name": port_name,
+        "source": source_name,
+        "author": author,
+        "title": title,
+        "description": description,
+        "content": content,
+        "url": _safe_text(article.get("url")),
+        "image_url": _safe_text(article.get("urlToImage")),
+        "published_at": _safe_text(article.get("publishedAt")),
+        "search_term": search_term,
+        "matched_keywords": matched_keywords,
+        "matched_keywords_str": ", ".join(matched_keywords),
+        "categories": assigned_categories,
+        "categories_str": ", ".join(assigned_categories),
+        "relevance_score": score,
+        "clean_text": clean_text,
+    }
 
 
-def preprocess_news_articles(raw_articles: Iterable[Dict[str, Any]], search_term: str) -> pd.DataFrame:
-    """Convert raw article JSON into a clean, standardized DataFrame."""
-    processed = [_standardize_article(article, search_term) for article in raw_articles]
+def preprocess_news_articles(
+    raw_articles: Iterable[Dict[str, Any]],
+    *,
+    port_name: str,
+    search_term: str,
+) -> pd.DataFrame:
+    processed = []
+    for article in raw_articles:
+        standardized = _standardize_article(article, port_name=port_name, search_term=search_term)
+        if standardized is not None:
+            processed.append(standardized)
+
     df = pd.DataFrame(processed)
 
     expected_columns = [
-        "uuid",
+        "port_name",
         "source",
+        "author",
         "title",
         "description",
-        "snippet",
-        "keywords",
+        "content",
         "url",
         "image_url",
-        "language",
-        "locale",
-        "categories",
-        "categories_str",
         "published_at",
         "search_term",
+        "matched_keywords",
+        "matched_keywords_str",
+        "categories",
+        "categories_str",
+        "relevance_score",
         "clean_text",
     ]
+
     for col in expected_columns:
         if col not in df.columns:
             df[col] = []
@@ -192,145 +287,78 @@ def preprocess_news_articles(raw_articles: Iterable[Dict[str, Any]], search_term
     if df.empty:
         return df.reindex(columns=expected_columns)
 
-    # Datetime standardization: API docs say dates are UTC/GMT.
     df["published_at"] = pd.to_datetime(df["published_at"], errors="coerce", utc=True)
 
-    # Missing values.
     text_columns = [
-        "uuid",
+        "port_name",
         "source",
+        "author",
         "title",
         "description",
-        "snippet",
-        "keywords",
+        "content",
         "url",
         "image_url",
-        "language",
-        "locale",
-        "categories_str",
         "search_term",
+        "matched_keywords_str",
+        "categories_str",
         "clean_text",
     ]
+
     for col in text_columns:
         df[col] = df[col].fillna("").astype(str).map(_normalize_whitespace)
 
+    df["matched_keywords"] = df["matched_keywords"].apply(_safe_list)
     df["categories"] = df["categories"].apply(_safe_list)
 
-    # Remove low-quality rows.
-    df = df[~((df["title"] == "") & (df["description"] == "") & (df["snippet"] == ""))].copy()
-
-    # Deduplicate articles.
-    if "url" in df.columns:
-        df = df.drop_duplicates(subset=["url"], keep="first")
-    if "uuid" in df.columns:
-        df = df.drop_duplicates(subset=["uuid"], keep="first")
-
-    # Derived features useful for ML / time series.
-    df["has_image"] = df["image_url"].ne("")
-    df["title_length"] = df["title"].str.len()
-    df["description_length"] = df["description"].str.len()
-    df["clean_text_length"] = df["clean_text"].str.len()
-    df["category_count"] = df["categories"].apply(len)
-    df["published_date"] = df["published_at"].dt.date.astype("string")
-    df["published_hour_utc"] = df["published_at"].dt.hour
-    df["published_dayofweek_utc"] = df["published_at"].dt.dayofweek
-
-    # Consistent ordering.
-    sort_cols = ["published_at", "source", "title"]
-    df = df.sort_values(sort_cols, ascending=[False, True, True], na_position="last").reset_index(drop=True)
+    df = df.drop_duplicates(subset=["url"], keep="first").reset_index(drop=True)
 
     return df
 
 
-def get_processed_news_data(
-    api_token: Optional[str] = None,
+def get_news_data(
+    port_name: str,
+    api_key: Optional[str] = None,
     *,
-    search: str = DEFAULT_SEARCH,
-    search_fields: str = DEFAULT_SEARCH_FIELDS,
-    language: str = DEFAULT_LANGUAGE,
-    categories: Optional[str] = DEFAULT_CATEGORIES,
-    exclude_categories: Optional[str] = None,
-    locale: Optional[str] = None,
-    domains: Optional[str] = None,
-    exclude_domains: Optional[str] = None,
-    published_after: Optional[str] = None,
-    published_before: Optional[str] = None,
-    limit: int = 50,
-    page: int = 1,
+    page_size: int = 100,
+    max_pages: int = 3,
 ) -> pd.DataFrame:
-    """Fetch + preprocess news and return a standardized pandas DataFrame."""
-    token = api_token or os.getenv("THENEWS_API_TOKEN")
-    if not token:
-        raise ValueError(
-            "Missing API token. Pass api_token=... or set THENEWS_API_TOKEN in your environment."
+    """
+    Main standardized method for the team.
+    Input: port name
+    Output: pandas DataFrame of processed port-related news
+    """
+    _ = get_port_info(port_name)  # validates that port exists in ports.csv
+
+    key = api_key or os.getenv("NEWS_API_KEY")
+    if not key:
+        raise ValueError("Missing API key. Pass api_key=... or set NEWS_API_KEY in your environment.")
+
+    query = build_port_news_query(port_name)
+    client = NewsAPIClient(api_key=key)
+
+    all_articles = []
+
+    for page in range(1, max_pages + 1):
+        payload = client.fetch_all_news(
+            search=query,
+            page_size=page_size,
+            page=page,
         )
+        articles = payload.get("articles", [])
+        if not articles:
+            break
 
-    client = TheNewsAPIClient(api_token=token)
-    payload = client.fetch_all_news(
-        search=search,
-        search_fields=search_fields,
-        language=language,
-        categories=categories,
-        exclude_categories=exclude_categories,
-        locale=locale,
-        domains=domains,
-        exclude_domains=exclude_domains,
-        published_after=published_after,
-        published_before=published_before,
-        limit=limit,
-        page=page,
-    )
-    articles = payload.get("data", [])
-    return preprocess_news_articles(articles, search_term=search)
+        all_articles.extend(articles)
 
+        if len(articles) < page_size:
+            break
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Fetch and preprocess news from TheNewsAPI.")
-    parser.add_argument("--api-token", default=None, help="TheNewsAPI token. Defaults to env var THENEWS_API_TOKEN.")
-    parser.add_argument("--search", default=DEFAULT_SEARCH, help="Search query for TheNewsAPI.")
-    parser.add_argument("--search-fields", default=DEFAULT_SEARCH_FIELDS, help="Comma-separated search fields.")
-    parser.add_argument("--language", default=DEFAULT_LANGUAGE, help="Language filter, e.g. en.")
-    parser.add_argument("--categories", default=DEFAULT_CATEGORIES, help="Comma-separated categories.")
-    parser.add_argument("--exclude-categories", default=None, help="Categories to exclude.")
-    parser.add_argument("--locale", default=None, help="Locale filter, e.g. us,gb.")
-    parser.add_argument("--domains", default=None, help="Comma-separated source domains to include.")
-    parser.add_argument("--exclude-domains", default=None, help="Comma-separated source domains to exclude.")
-    parser.add_argument("--published-after", default=None, help="Only include articles published after YYYY-MM-DD.")
-    parser.add_argument("--published-before", default=None, help="Only include articles published before YYYY-MM-DD.")
-    parser.add_argument("--limit", type=int, default=50, help="Number of articles to request.")
-    parser.add_argument("--page", type=int, default=1, help="Page number.")
-    parser.add_argument("--save-csv", default=None, help="Optional CSV output path.")
-    parser.add_argument("--save-json", default=None, help="Optional JSON output path.")
-    args = parser.parse_args()
-
-    df = get_processed_news_data(
-        api_token=args.api_token,
-        search=args.search,
-        search_fields=args.search_fields,
-        language=args.language,
-        categories=args.categories,
-        exclude_categories=args.exclude_categories,
-        locale=args.locale,
-        domains=args.domains,
-        exclude_domains=args.exclude_domains,
-        published_after=args.published_after,
-        published_before=args.published_before,
-        limit=args.limit,
-        page=args.page,
+    return preprocess_news_articles(
+        all_articles,
+        port_name=port_name,
+        search_term=query,
     )
 
-    print(f"Fetched and processed {len(df)} articles.")
-    if not df.empty:
-        print(df.head(10).to_string(index=False))
-
-    if args.save_csv:
-        df.to_csv(args.save_csv, index=False)
-        print(f"Saved CSV to {args.save_csv}")
-
-    if args.save_json:
-        df.to_json(args.save_json, orient="records", indent=2, date_format="iso")
-        print(f"Saved JSON to {args.save_json}")
-
-
-if __name__ == "__main__":
-    main()
+#from news_api import get_news_data
+#df = get_news_data("Port of Houston")
+#print(df.head())
