@@ -15,7 +15,7 @@ from datetime import datetime, timedelta, timezone
 from ports_config import load_ports, get_port
 
 INSTANCE_ID = "8bfa6630-6f4a-4968-b260-7691ee655aa5"
-OUTPUT_DIR = "C:/Users/laxmi/New folder/sentinel2_output"
+OUTPUT_DIR = "data_sources/satellite_images/"
 
 
 def clear_output_dir(port_name: str = None):

@@ -8,7 +8,7 @@ import os
 import pandas as pd
 
 # Path to ports.csv — assumes it sits in the same folder as this file
-PORTS_CSV = os.path.join(os.path.dirname(__file__), "ports.csv")
+PORTS_CSV = os.path.join(os.path.dirname(__file__), "CSV Files", "ports.csv")
 
 def load_ports() -> pd.DataFrame:
     """
