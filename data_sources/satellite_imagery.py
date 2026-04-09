@@ -75,7 +75,7 @@ def get_satellite_imagery(port_name: str, date: str = None) -> str | None:
         f"&FORMAT=image/png&WIDTH=2048&HEIGHT=2048&CRS=EPSG:4326"
         f"&BBOX={port['min_lat']},{port['min_lon']},{port['max_lat']},{port['max_lon']}"
         f"&TIME={start_date}/{end_date}"
-        f"&MAXCC=20"
+        f"&MAXCC=100"
     )
 
     print(f"[SATELLITE] Fetching {port_name} ({start_date} to {end_date})...")
