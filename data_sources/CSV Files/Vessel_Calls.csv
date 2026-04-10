@@ -1,5 +1,4 @@
-,CAPACITY IN TEU,,
-Port,Maximum,Average,Calls
+Port,Maximum(TEU),Average(TEU),Calls
 Port of Baltimore,"9,400","5,534",381
 Port of Boston,"8,930","5,760",159
 Port of Charleston,"10,700","5,791","1,377"
