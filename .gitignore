@@ -10,3 +10,5 @@ venv/
 
 # VS Code settings
 .vscode/
+
+satellite_images/
