@@ -1,249 +1,162 @@
-import logging
-import time
-from pathlib import Path
 
+import os
+import requests
 import pandas as pd
-import geopandas as gpd
-from shapely.geometry import Point, box
-from sodapy import Socrata
 
-# logging setup
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler("port_crime.log"),
-    ],
-)
-log = logging.getLogger(__name__)
-
-# config for ports and bounding boxes
-
-RECORD_LIMIT = 50000
-DATE_FILTER = "2024-01-01T00:00:00"
-
-# Output config
-OUTPUT_DIR = Path("output")
-OUTPUT_FORMAT = "parquet"  # "parquet" or "csv"
-
-PORT_BBOXES = {
-    "Port of Houston":          [-95.35, 29.55, -94.85, 29.85],
-    "Port of Corpus Christi":   [-97.50, 27.75, -97.00, 28.00],
-    "Port of Brownsville":      [-97.50, 25.90, -97.10, 26.10],
-    "Port Arthur / Beaumont":   [-94.20, 29.85, -93.80, 30.10],
-    "Port of Galveston":        [-94.90, 29.25, -94.70, 29.40],
-    "Port of New Orleans":      [-90.10, 29.90, -89.90, 30.05],
-    "Port of Lake Charles":     [-93.30, 30.15, -93.10, 30.25],
-    "Port of Mobile":           [-88.10, 30.60, -87.90, 30.75],
-    "Port of Tampa Bay":        [-82.55, 27.85, -82.35, 28.00],
-    "Port of Pascagoula":       [-88.65, 30.30, -88.45, 30.45],
-    "Port of Gulfport":         [-89.15, 30.30, -88.95, 30.45],
-    "Port of Freeport":         [-95.40, 28.90, -95.20, 29.05],
-
-    "Port of New York / New Jersey": [-74.15, 40.55, -73.85, 40.75],
-    "Port of Baltimore":        [-76.65, 39.20, -76.45, 39.35],
-    "Port of Virginia (Norfolk)": [-76.40, 36.85, -76.20, 37.05],
-    "Port of Savannah":         [-81.15, 31.95, -80.95, 32.15],
-    "Port of Charleston":       [-79.97, 32.70, -79.87, 32.85],
-    "Port of Jacksonville":     [-81.65, 30.30, -81.50, 30.45],
-    "Port Everglades (Fort Lauderdale)": [-80.15, 26.05, -80.05, 26.15],
-    "Port of Miami":            [-80.20, 25.75, -80.10, 25.85],
-    "Port of Port Canaveral":   [-80.65, 28.38, -80.55, 28.48],
-    "Port of Philadelphia":     [-75.20, 39.85, -75.00, 40.05],
-    "Port of Boston":           [-71.10, 42.30, -70.90, 42.45],
-
-    "Port of Los Angeles":      [-118.30, 33.65, -118.10, 33.80],
-    "Port of Long Beach":       [-118.25, 33.70, -118.10, 33.85],
-    "Port of San Diego":        [-117.20, 32.65, -117.05, 32.80],
-    "Port of Oakland":          [-122.35, 37.75, -122.20, 37.85],
-    "Port of Seattle":          [-122.45, 47.55, -122.30, 47.70],
-
-    "Port of Chicago":          [-87.75, 41.70, -87.55, 41.90],
-    "Port of Detroit":          [-83.15, 42.25, -82.95, 42.45],
+# --- city configurations ---
+# this will map the city key → Socrata API endpoint + port bounding box
+CITY_CONFIG = {
+    "la": {
+        "name": "Los Angeles",
+        "port_name": "Port of Los Angeles",
+        "api_url": "https://data.lacity.org/resource/2nrs-mtv8.json",
+        "date_col": "date_occ",
+        "lat_col": "lat",
+        "lon_col": "lon",
+        "crime_col": "crm_cd_desc",
+        "id_col": "dr_no",
+        # bounding box for San Pedro / Port of LA area
+        "bbox": {"lat_min": 33.69, "lat_max": 33.76, "lon_min": -118.30, "lon_max": -118.19},
+    },
+    "nyc": {
+        "name": "New York City",
+        "port_name": "Port of New York/New Jersey",
+        "api_url": "https://data.cityofnewyork.us/resource/5uac-w243.json",
+        "date_col": "cmplnt_fr_dt",
+        "lat_col": "latitude",
+        "lon_col": "longitude",
+        "crime_col": "ofns_desc",
+        "id_col": "cmplnt_num",
+        # bounsinf box for Red Hook / Port Newark area
+        "bbox": {"lat_min": 40.63, "lat_max": 40.70, "lon_min": -74.10, "lon_max": -74.01},
+    },
+    "chi": {
+        "name": "Chicago",
+        "port_name": "Port of Chicago",
+        "api_url": "https://data.cityofchicago.org/resource/ijzp-q8t2.json",
+        "date_col": "date",
+        "lat_col": "latitude",
+        "lon_col": "longitude",
+        "crime_col": "primary_type",
+        "id_col": "id",
+        # bounding box for Calumet Harbor / Lake Calumet area
+        "bbox": {"lat_min": 41.70, "lat_max": 41.75, "lon_min": -87.56, "lon_max": -87.52},
+    },
 }
 
-CITY_APIS = [
-    {
-        "domain": "data.seattle.gov",
-        "dataset": "tazs-3rd5",
-        "lat": "latitude",
-        "lon": "longitude",
-        "date": "offense_start_datetime",
-        "type": "offense",
-    },
-    {
-        "domain": "data.lacity.org",
-        "dataset": "2nrs-mtv8",
-        "lat": "lat",
-        "lon": "lon",
-        "date": "date_occ",
-        "type": "crm_cd_desc",
-    },
-    {
-        "domain": "data.houstontx.gov",
-        "dataset": "gxrs-zszg",
-        "lat": "latitude",
-        "lon": "longitude",
-        "date": "date",
-        "type": "offense_type",
-    },
-    {
-        "domain": "data.cityofnewyork.us",
-        "dataset": "qgea-i56i",
-        "lat": "latitude",
-        "lon": "longitude",
-        "date": "cmplnt_fr_dt",
-        "type": "ofns_desc",
-    },
+# crime keywords to keep — everything else is filtered out
+PORT_CRIME_KEYWORDS = [
+    "THEFT", "BURGLARY", "ROBBERY", "CARGO",
+    "ASSAULT", "BATTERY", "SMUGGL", "CONTRABAND",
+    "TRESPASS", "VANDALISM", "WEAPON", "NARCOTICS",
 ]
 
-# spatial data setup
 
-def build_port_geodataframe() -> gpd.GeoDataFrame:
-    """
-    Build a GeoDataFrame of port bounding boxes.
-    This is constructed once and reused for all spatial joins.
-    """
-    records = [
-        {"port_name": name, "geometry": box(lon_min, lat_min, lon_max, lat_max)}
-        for name, (lon_min, lat_min, lon_max, lat_max) in PORT_BBOXES.items()
-    ]
-    return gpd.GeoDataFrame(records, crs="EPSG:4326")
+def get_city_crime(
+    city: str,
+    local_path: str = None,
+    start_date: str = "2022-01-01",
+    app_token: str = None,
+    limit: int = 10000,
+) -> pd.DataFrame:
 
-PORT_GDF = build_port_geodataframe()
+    # Load city crime data near port areas.
 
-# helper functions
+    city = city.lower()
+    if city not in CITY_CONFIG:
+        raise ValueError(f"Unknown city '{city}'. Choose from: {list(CITY_CONFIG.keys())}")
 
-def fetch_with_retry(client, dataset, where=None, retries=3):
-    for attempt in range(retries):
-        try:
-            return client.get(dataset, where=where, limit=RECORD_LIMIT)
-        except Exception as e:
-            wait = 2 ** attempt
-            log.warning(
-                "Attempt %d/%d failed for dataset '%s': %s. Retrying in %ds...",
-                attempt + 1, retries, dataset, e, wait,
-            )
-            time.sleep(wait)
-    log.error(
-        "All %d retries exhausted for dataset '%s'. Skipping.", retries, dataset
-    )
-    return []
+    config = CITY_CONFIG[city]
 
-
-def validate_columns(df: pd.DataFrame, cols: list, source: str) -> bool:
-    missing = [c for c in cols if c not in df.columns]
-    if missing:
-        log.warning("'%s' missing expected columns: %s", source, missing)
-        return False
-    return True
-
-
-def tag_ports(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Spatially join crime points to port bounding boxes using a spatial index.
-    Much faster than iterating over bounding boxes row-by-row.
-    """
-    gdf = gpd.GeoDataFrame(
-        df,
-        geometry=gpd.points_from_xy(df["longitude"], df["latitude"]),
-        crs="EPSG:4326",
-    )
-
-    joined = gpd.sjoin(gdf, PORT_GDF, how="inner", predicate="within")
-
-    # Drop the spatial join index column and geometry
-    joined = joined.drop(columns=["index_right", "geometry"])
-
-    return pd.DataFrame(joined)
-
-
-# core function to fetch, clean, and tag data for a single city API
-
-def fetch_city(api: dict) -> pd.DataFrame:
-    log.info("Fetching from %s (dataset: %s)...", api["domain"], api["dataset"])
-    client = Socrata(api["domain"], None)
-
-    where_clause = f"{api['date']} >= '{DATE_FILTER}'" if DATE_FILTER else None
-    records = fetch_with_retry(client, api["dataset"], where_clause)
-
-    if not records:
-        log.warning("No records returned from %s.", api["domain"])
-        return pd.DataFrame()
-
-    df = pd.DataFrame(records)
-    log.info("  Raw records from %s: %d", api["domain"], len(df))
-
-    required = [api["lat"], api["lon"], api["date"], api["type"]]
-    if not validate_columns(df, required, api["domain"]):
-        return pd.DataFrame()
-
-    df = df.dropna(subset=required)
-    df["latitude"] = pd.to_numeric(df[api["lat"]], errors="coerce")
-    df["longitude"] = pd.to_numeric(df[api["lon"]], errors="coerce")
-    df["date"] = pd.to_datetime(df[api["date"]], errors="coerce")
-    df["crime_type"] = df[api["type"]]
-    df = df.dropna(subset=["latitude", "longitude", "date"])
-
-    df = tag_ports(df)
-
-    if df.empty:
-        log.info("  No records near any port from %s.", api["domain"])
-        return pd.DataFrame()
-
-    df["source"] = api["domain"]
-    log.info("  Port-tagged records from %s: %d", api["domain"], len(df))
-
-    return df[["port_name", "date", "crime_type", "source", "latitude", "longitude"]]
-
-
-# export function
-
-def export(df: pd.DataFrame, fmt: str = OUTPUT_FORMAT) -> Path:
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-
-    if fmt == "parquet":
-        path = OUTPUT_DIR / "port_crimes.parquet"
-        df.to_parquet(path, index=False)
-    elif fmt == "csv":
-        path = OUTPUT_DIR / "port_crimes.csv"
-        df.to_csv(path, index=False)
+    if local_path and os.path.exists(local_path):
+        print(f"[city_crime:{city}] Loading from local file: {local_path}")
+        raw = pd.read_csv(local_path, low_memory=False)
     else:
-        raise ValueError(f"Unsupported format: {fmt!r}. Use 'parquet' or 'csv'.")
+        if local_path:
+            print(f"[city_crime:{city}] Local file not found at '{local_path}'. Trying API...")
+        raw = _fetch_from_api(city, config, start_date, app_token, limit)
 
-    log.info("Exported %d records to %s", len(df), path)
-    return path
+    return _parse(raw, city, config)
 
 
-# main pipeline function
-def get_data() -> pd.DataFrame:
-    frames = []
+# --- Internal functions ---
 
-    for api in CITY_APIS:
-        df = fetch_city(api)
-        if not df.empty:
-            frames.append(df)
+def _fetch_from_api(
+    city: str,
+    config: dict,
+    start_date: str,
+    app_token: str,
+    limit: int,
+) -> pd.DataFrame:
+    bbox = config["bbox"]
+    date_col = config["date_col"]
+    lat_col = config["lat_col"]
+    lon_col = config["lon_col"]
 
-    if not frames:
-        log.warning("No data fetched from any source.")
-        return pd.DataFrame()
+    headers = {}
+    if app_token:
+        headers["X-App-Token"] = app_token
 
-    combined = pd.concat(frames, ignore_index=True)
-    combined = combined.drop_duplicates()
-
-    log.info(
-        "Pipeline complete: %d total records from %d cities.",
-        len(combined), len(frames),
+    where = (
+        f"{date_col} >= '{start_date}T00:00:00' "
+        f"AND {lat_col} >= '{bbox['lat_min']}' AND {lat_col} <= '{bbox['lat_max']}' "
+        f"AND {lon_col} >= '{bbox['lon_min']}' AND {lon_col} <= '{bbox['lon_max']}'"
     )
-    return combined
+
+    params = {"$limit": limit, "$where": where, "$order": f"{date_col} DESC"}
+
+    print(f"[city_crime:{city}] Fetching from API (from {start_date})...")
+    response = requests.get(config["api_url"], headers=headers, params=params, timeout=30)
+    response.raise_for_status()
+    data = response.json()
+    print(f"[city_crime:{city}] Got {len(data)} raw records")
+    return pd.DataFrame(data)
 
 
-# run the pipeline
+def _parse(df: pd.DataFrame, city: str, config: dict) -> pd.DataFrame:
+    df.columns = df.columns.str.strip().str.lower()
+
+    lat_col = config["lat_col"].lower()
+    lon_col = config["lon_col"].lower()
+    date_col = config["date_col"].lower()
+    crime_col = config["crime_col"].lower()
+    id_col = config["id_col"].lower()
+
+    # Drop rows missing critical fields
+    df = df.dropna(subset=[lat_col, lon_col])
+    df[lat_col] = pd.to_numeric(df[lat_col], errors="coerce")
+    df[lon_col] = pd.to_numeric(df[lon_col], errors="coerce")
+    df = df.dropna(subset=[lat_col, lon_col])
+
+    # Filter to port-relevant crime types only
+    if crime_col in df.columns:
+        mask = df[crime_col].str.upper().str.contains(
+            "|".join(PORT_CRIME_KEYWORDS), na=False
+        )
+        before = len(df)
+        df = df[mask]
+        print(f"[city_crime:{city}] Filtered to {len(df)} port-relevant records (from {before})")
+
+    # Build a normalized output DataFrame
+    normalized = pd.DataFrame({
+        "source_id": df.get(id_col, pd.Series(dtype=str)),
+        "source": f"city_open_data_{city}",
+        "port_name": config["port_name"],
+        "date": pd.to_datetime(df.get(date_col), errors="coerce").dt.strftime("%Y-%m-%d"),
+        "lat": df[lat_col],
+        "lon": df[lon_col],
+        "crime_type": df.get(crime_col, pd.Series(dtype=str)).str.upper(),
+    })
+
+    print(f"[city_crime:{city}] {len(normalized):,} normalized records")
+    return normalized
+
 
 if __name__ == "__main__":
-    df = get_data()
-    if not df.empty:
-        export(df)
-        print(df.head(20))
+    # Example: load LA data from a downloaded CSV
+    # df = get_city_crime("la", local_path="data/la_crime.csv")
+
+    # Example: pull NYC from API (no token needed for small pulls)
+    df = get_city_crime("nyc", start_date="2023-01-01")
+    print(df.head())
+    print(f"\nCrime types found:\n{df['crime_type'].value_counts().head(10)}")
