@@ -1,218 +1,209 @@
 """
 Port Cargo Crime Fetcher
 ========================
-Fetches FBI cargo theft data for every port listed in ports.csv.
+Reads FBI cargo theft data from local xlsx files (2022-2024)
+and produces clean DataFrames filtered to port-relevant property types.
+
 
 Usage
 -----
-    pip install requests pandas tqdm
+    pip install pandas openpyxl
 
-    python port_cargo_crime.py --fbi-key YOUR_KEY
-    python port_cargo_crime.py --fbi-key YOUR_KEY --start-year 2018 --end-year 2022
-    python port_cargo_crime.py --fbi-key YOUR_KEY --ports-file path/to/ports.csv
+    python port_cargo_crime.py
+    python port_cargo_crime.py --data-dir path/to/cargo-theft-folders
 
-Get a free API key at: https://api.data.gov/signup/
+    # Import and call directly:
+    from port_cargo_crime import load_all_years, get_port_relevant
+    df = load_all_years()
+    port_df = get_port_relevant(df)
 
 Output
 ------
-    cargo_theft_all_ports.csv   – combined DataFrame, one row per port/year/variable
-    ./cargo_theft_by_port/      – one CSV per port
-
-Returns (if imported)
----------------------
-    fbi_dfs : dict { port_name -> pd.DataFrame }
+    cargo_theft_all_years.csv         - all property types, 2022-2024
+    cargo_theft_port_relevant.csv     - port-relevant types only
 """
 
 import argparse
 import os
-import time
+from pathlib import Path
 
 import pandas as pd
-import requests
-from tqdm import tqdm
 
-# FBI ORI codes — nearest reporting police agency for each port
-PORT_ORI = {
-    "Port of Houston":                   "TX2270300",
-    "Port of Corpus Christi":            "TX3550100",
-    "Port of Brownsville":               "TX3130100",
-    "Port Arthur / Beaumont":            "TX3610400",
-    "Port of Galveston":                 "TX0840200",
-    "Port of New Orleans":               "LA0360200",
-    "Port of Lake Charles":              "LA0190100",
-    "Port of Mobile":                    "AL0970100",
-    "Port of Tampa Bay":                 "FL2910200",
-    "Port of Pascagoula":                "MS0590100",
-    "Port of Gulfport":                  "MS0470100",
-    "Port of Freeport":                  "TX0200100",
-    "Port of New York / New Jersey":     "NY0303000",
-    "Port of Baltimore":                 "MD0040100",
-    "Port of Virginia (Norfolk)":        "VA0830100",
-    "Port of Savannah":                  "GA0510200",
-    "Port of Charleston":                "SC0190100",
-    "Port of Jacksonville":              "FL0160100",
-    "Port Everglades (Fort Lauderdale)": "FL0600100",
-    "Port of Miami":                     "FL0250100",
-    "Port of Port Canaveral":            "FL0090100",
-    "Port of Philadelphia":              "PA1010000",
-    "Port of Boston":                    "MA0020100",
-    "Port of Providence":                "RI0040100",
-    "Port of Wilmington (NC)":           "NC0260100",
-    "Port of Brunswick (GA)":            "GA1270100",
-    "Port of Los Angeles":               "CA0194200",
-    "Port of Long Beach":                "CA0190600",
-    "Port of San Diego":                 "CA0730200",
-    "Port of San Francisco":             "CA0380100",
-    "Port of Oakland":                   "CA0010600",
-    "Port of Seattle":                   "WA0330100",
-    "Port of Tacoma":                    "WA0530500",
-    "Port of Portland (OR)":             "OR0260100",
-    "Port Hueneme":                      "CA1110200",
-    "Port of Chicago":                   "IL0160000",
-    "Port of Detroit":                   "MI0820200",
-    "Port of Cleveland":                 "OH0350100",
-    "Port of Milwaukee":                 "WI0400100",
-    "Port of Duluth / Superior":         "MN0170100",
-    "Port of Toledo":                    "OH0430400",
-    "Port of Buffalo":                   "NY0140100",
-    "Port of St. Louis":                 "MO0950100",
-    "Port of Memphis":                   "TN0790100",
-    "Port of Baton Rouge":               "LA0170100",
+# ── Property types relevant to port/maritime cargo ────────────────────────────
+PORT_RELEVANT_TYPES = {
+    "Trucks",
+    "Trailers",
+    "Merchandise",
+    "Consumable goods",
+    "Computer hardware, software",
+    "Portable electronic communications",
+    "Clothes, furs",
+    "Industrial equipment",
+    "Metals, non-precious",
+    "Chemicals",
+    "Fuel",
+    "Other motor vehicles",
+    "Vehicle parts",
+    "Farm equipment",
+    "Alcohol",
+    "Drugs, narcotics",
+    "Firearms",
+    "Other",
+    "Total",
 }
 
-FBI_BASE = "https://api.usa.gov/crime/fbi/sapi"
+# ── File map: year -> expected filename pattern ───────────────────────────────
+FILE_PATTERNS = {
+    2022: "Table_2_Cargo_Theft_Property_Stolen_and_Recovered_by_Type_and_Value_2022.xlsx",
+    2023: "Table_2_Cargo_Theft_Property_Stolen_and_Recovered_by_Type_and_Value_2023.xlsx",
+    2024: "Cargo_Theft_Table_2_Cargo_Theft_Property_Stolen_and_Recovered_by_Type_and_Value_2024.xlsx",
+}
+
+SHEET_NAMES = {
+    2022: "22tbl02",
+    2023: "23tbl02",
+    2024: "24tbl02",
+}
 
 
-def load_ports(ports_file="ports.csv"):
-    """Load port names and bounding boxes from ports.csv."""
-    df = pd.read_csv(ports_file)
-    # returns list of port_name strings (bbox available if needed later)
-    return df
+def find_file(data_dir: Path, year: int) -> Path:
+    """Find the Table 2 xlsx for a given year in data_dir or its subdirs."""
+    # Try exact filename first
+    exact = data_dir / FILE_PATTERNS[year]
+    if exact.exists():
+        return exact
 
+    # Search subdirectories
+    for p in data_dir.rglob("*.xlsx"):
+        if f"Table_2" in p.name or "Table2" in p.name or "tbl02" in p.name.lower():
+            if str(year) in p.name:
+                return p
 
-def fbi_get(path, api_key):
-    """GET from FBI API with basic retry on rate limit."""
-    url = f"{FBI_BASE}/{path}"
-    for attempt in range(3):
-        try:
-            r = requests.get(url, params={"api_key": api_key}, timeout=30)
-            if r.status_code == 429:
-                time.sleep(2 ** attempt)
-                continue
-            r.raise_for_status()
-            return r.json()
-        except requests.RequestException as e:
-            if attempt == 2:
-                print(f"  [warn] {path}: {e}")
-                return None
-            time.sleep(1)
     return None
 
 
-def fetch_cargo_theft(port_name, ori, api_key, start_year, end_year):
+def parse_table2(filepath: Path, year: int) -> pd.DataFrame:
     """
-    Fetch FBI cargo theft data for one port's ORI code.
-    Returns a DataFrame with columns:
-        port, ori, year, stolen_value, recovered_value,
-        incidents, location_type, cargo_desc
+    Parse a Table 2 xlsx file into a clean DataFrame with columns:
+        year, property_type, stolen_value, recovered_value, pct_recovered
     """
-    path = f"api/cargo-theft/agencies/{ori}/{start_year}/{end_year}"
-    data = fbi_get(path, api_key)
+    sheet = SHEET_NAMES[year]
+    raw = pd.read_excel(filepath, sheet_name=sheet, header=None)
 
-    if not data or "results" not in data or not data["results"]:
-        return pd.DataFrame()
+    # Data starts at row 5 (0-indexed), columns: 0=type, 1=stolen, 2=recovered, 3=pct
+    data = raw.iloc[5:].copy()
+    data.columns = ["property_type", "stolen_value", "recovered_value", "pct_recovered"]
 
-    df = pd.DataFrame(data["results"])
-    df.insert(0, "port", port_name)
-    df.insert(1, "ori", ori)
-    return df
+    # Drop footnote rows (non-string or NaN property_type)
+    data = data[data["property_type"].apply(lambda x: isinstance(x, str))]
+    data = data[~data["property_type"].str.startswith(("1 ", "2 ", "*", "Due", "According"))]
+
+    # Clean up
+    data["property_type"] = data["property_type"].str.strip()
+    data["stolen_value"] = pd.to_numeric(data["stolen_value"], errors="coerce")
+    data["recovered_value"] = pd.to_numeric(data["recovered_value"], errors="coerce")
+    data["pct_recovered"] = pd.to_numeric(
+        data["pct_recovered"].replace("*", "0.05"), errors="coerce"
+    )
+    data["year"] = year
+
+    return data[["year", "property_type", "stolen_value", "recovered_value", "pct_recovered"]].reset_index(drop=True)
 
 
-def main(fbi_key, ports_file="ports.csv", start_year=2015, end_year=2023, save_csv=True):
+def load_all_years(data_dir: str = ".") -> pd.DataFrame:
     """
+    Load and combine Table 2 data for all available years.
+
     Parameters
     ----------
-    fbi_key    : str   – data.gov API key
-    ports_file : str   – path to ports.csv
-    start_year : int
-    end_year   : int
-    save_csv   : bool
+    data_dir : str
+        Directory containing the xlsx files or year subfolders.
 
     Returns
     -------
-    fbi_dfs : dict { port_name -> pd.DataFrame }
+    pd.DataFrame with columns:
+        year, property_type, stolen_value, recovered_value, pct_recovered
     """
-    ports_df = load_ports(ports_file)
-    port_names = ports_df["port_name"].tolist()
+    data_dir = Path(data_dir)
+    frames = []
+
+    for year in [2022, 2023, 2024]:
+        filepath = find_file(data_dir, year)
+        if filepath is None:
+            print(f"  [warn] Could not find Table 2 file for {year} in {data_dir}")
+            continue
+        df = parse_table2(filepath, year)
+        frames.append(df)
+        print(f"  Loaded {year}: {len(df)} property types  ({filepath.name})")
+
+    if not frames:
+        print("No files loaded. Check your --data-dir path.")
+        return pd.DataFrame()
+
+    combined = pd.concat(frames, ignore_index=True)
+    print(f"\n  Total rows: {len(combined)} across {len(frames)} year(s)")
+    return combined
+
+
+def get_port_relevant(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Filter to port-relevant property types only.
+
+    Returns
+    -------
+    pd.DataFrame — subset of input, sorted by year and stolen_value desc
+    """
+    mask = df["property_type"].isin(PORT_RELEVANT_TYPES)
+    filtered = df[mask].copy()
+    filtered = filtered.sort_values(["year", "stolen_value"], ascending=[True, False])
+    return filtered.reset_index(drop=True)
+
+
+def main(data_dir: str = ".", save_csv: bool = True) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Load all years and produce two DataFrames.
+
+    Returns
+    -------
+    all_df       : all property types combined
+    port_df      : port-relevant types only
+    """
+    print(f"\nLoading FBI cargo theft data from: {Path(data_dir).resolve()}\n")
+    all_df = load_all_years(data_dir)
+
+    if all_df.empty:
+        return all_df, pd.DataFrame()
+
+    port_df = get_port_relevant(all_df)
+    print(f"  Port-relevant rows: {len(port_df)}")
 
     if save_csv:
-        os.makedirs("cargo_theft_by_port", exist_ok=True)
+        all_df.to_csv("cargo_theft_all_years.csv", index=False)
+        port_df.to_csv("cargo_theft_port_relevant.csv", index=False)
+        print(f"\nSaved:")
+        print(f"  cargo_theft_all_years.csv     ({len(all_df)} rows)")
+        print(f"  cargo_theft_port_relevant.csv ({len(port_df)} rows)")
 
-    fbi_dfs = {}
-    missing_ori = []
-    no_data = []
-
-    print(f"\nFetching FBI cargo theft data ({start_year}–{end_year}) for {len(port_names)} ports...\n")
-
-    for port_name in tqdm(port_names, desc="Ports"):
-        ori = PORT_ORI.get(port_name)
-        if not ori:
-            missing_ori.append(port_name)
-            continue
-
-        df = fetch_cargo_theft(port_name, ori, api_key=fbi_key,
-                               start_year=start_year, end_year=end_year)
-
-        if df.empty:
-            no_data.append(port_name)
-        else:
-            fbi_dfs[port_name] = df
-            if save_csv:
-                safe = port_name.replace("/", "_").replace(" ", "_")
-                df.to_csv(f"cargo_theft_by_port/{safe}.csv", index=False)
-
-        time.sleep(0.15)
-
-    # Remove no-data ports from ports.csv
-    if no_data or missing_ori:
-        drop = set(no_data + missing_ori)
-        ports_df = load_ports(ports_file)
-        ports_df = ports_df[~ports_df["port_name"].isin(drop)]
-        ports_df.to_csv(ports_file, index=False)
-        print(f"\nRemoved {len(drop)} ports from {ports_file}: {sorted(drop)}")
-
-    # Combined file
-    if fbi_dfs and save_csv:
-        combined = pd.concat(fbi_dfs.values(), ignore_index=True)
-        combined.to_csv("cargo_theft_all_ports.csv", index=False)
-        print(f"Saved: cargo_theft_all_ports.csv ({len(combined)} rows)")
-
-    # Summary
     print(f"\n{'='*55}")
-    print(f"  Results")
+    print(f"  Port-Relevant Cargo Theft Summary")
     print(f"{'='*55}")
-    print(f"  Ports kept         : {len(fbi_dfs)}")
-    print(f"  Removed (no data)  : {len(no_data)}  {no_data if no_data else ''}")
-    print(f"  Removed (no ORI)   : {len(missing_ori)}  {missing_ori if missing_ori else ''}")
+    summary = (
+        port_df.groupby("year")[["stolen_value", "recovered_value"]]
+        .sum()
+        .assign(pct_recovered=lambda x: (x["recovered_value"] / x["stolen_value"] * 100).round(1))
+    )
+    print(summary.to_string())
 
-    return fbi_dfs
+    return all_df, port_df
 
-
-# ── CLI ───────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Fetch FBI cargo theft data for ports.")
-    parser.add_argument("--fbi-key",     required=True, help="data.gov API key")
-    parser.add_argument("--ports-file",  default="ports.csv", help="Path to ports.csv")
-    parser.add_argument("--start-year",  default=2015, type=int)
-    parser.add_argument("--end-year",    default=2023, type=int)
-    parser.add_argument("--no-csv",      action="store_true")
+    parser = argparse.ArgumentParser(description="Load FBI cargo theft xlsx files.")
+    parser.add_argument(
+        "--data-dir", default=".",
+        help="Directory containing the xlsx files or cargo-theft-20XX subfolders (default: current dir)"
+    )
+    parser.add_argument("--no-csv", action="store_true", help="Skip saving CSVs")
     args = parser.parse_args()
 
-    fbi_dfs = main(
-        fbi_key    = args.fbi_key,
-        ports_file = args.ports_file,
-        start_year = args.start_year,
-        end_year   = args.end_year,
-        save_csv   = not args.no_csv,
-    )
+    all_df, port_df = main(data_dir=args.data_dir, save_csv=not args.no_csv)
