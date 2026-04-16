@@ -39,8 +39,8 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 from uuid import uuid4
 
-from app.cache import PersistentCache
-from app.models import (
+from cache import PersistentCache
+from models import (
     ConfidenceLabel,
     EXCLUDED_STATES,
     Port,

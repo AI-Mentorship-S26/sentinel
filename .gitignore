@@ -12,3 +12,5 @@ venv/
 .vscode/
 
 satellite_images/
+
+app/

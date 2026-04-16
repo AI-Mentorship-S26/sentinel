@@ -1,0 +1,51 @@
+problem_count,overall_confidence,stale_data_warning,vessel_type,flag,origin_port,status,confidence,eta_utc,eta_hours_to_arrival,is_delayed
+3,medium,False,Tanker,US,Busan,At anchor,medium,2026-04-16T15:48:00.252027+00:00,12.999930688333334,True
+3,medium,False,Container Ship,SG,Rotterdam,Underway,medium,2026-04-17T05:48:00.252027+00:00,26.999930688333333,False
+3,medium,False,Bulk Carrier,US,Santos,Underway,medium,2026-04-16T06:48:00.252027+00:00,3.9999306883333334,False
+3,medium,False,Container Ship,US,Panama,Moored,medium,2026-04-18T02:48:00.252027+00:00,47.999930688333336,False
+3,medium,False,Tanker,PA,Rotterdam,Underway,medium,2026-04-17T13:48:00.252027+00:00,34.999930688333336,False
+3,medium,False,Ro-Ro,US,Shanghai,At anchor,medium,2026-04-17T10:48:00.252027+00:00,31.999930688333333,False
+3,medium,False,Ro-Ro,US,Panama,Underway,medium,2026-04-17T01:48:00.252027+00:00,22.999930688333333,False
+3,medium,False,Container Ship,US,Busan,Approaching,medium,2026-04-17T21:48:00.252027+00:00,42.999930688333336,False
+3,medium,False,Bulk Carrier,LR,Busan,Underway,medium,2026-04-18T01:48:00.252027+00:00,46.999930688333336,False
+3,medium,False,Ro-Ro,US,Busan,Underway,medium,2026-04-17T21:48:00.252027+00:00,42.999930688333336,False
+3,medium,False,Bulk Carrier,SG,Panama,Underway,medium,2026-04-17T18:48:00.252027+00:00,39.999930688333336,True
+3,medium,False,Ro-Ro,MH,Santos,Underway,medium,2026-04-16T10:48:00.252027+00:00,7.999930688333333,False
+3,medium,False,Container Ship,PA,Santos,Moored,medium,2026-04-16T14:48:00.252027+00:00,11.999930688333334,False
+3,medium,False,Tanker,PA,Busan,Moored,medium,2026-04-17T09:48:00.252027+00:00,30.999930688333333,False
+3,medium,False,Bulk Carrier,PA,Busan,Moored,medium,2026-04-18T00:48:00.252027+00:00,45.999930688333336,False
+3,medium,False,Ro-Ro,MH,Shanghai,At anchor,medium,2026-04-17T06:48:00.252027+00:00,27.999930688333333,False
+3,medium,False,Bulk Carrier,SG,Panama,At anchor,medium,2026-04-18T01:48:00.252027+00:00,46.999930688333336,False
+3,medium,False,Ro-Ro,US,Santos,At anchor,medium,2026-04-16T09:48:00.252027+00:00,6.999930688333333,False
+3,medium,False,Tanker,PA,Santos,Approaching,medium,2026-04-17T08:48:00.252027+00:00,29.999930688333333,False
+3,medium,False,Tanker,LR,Panama,At anchor,medium,2026-04-16T15:48:00.252027+00:00,12.999930688333334,True
+3,medium,False,Container Ship,SG,Panama,At anchor,medium,2026-04-16T10:48:00.252027+00:00,7.999930688333333,True
+3,medium,False,Tanker,US,Rotterdam,Underway,medium,2026-04-17T03:48:00.252027+00:00,24.999930688333333,False
+3,medium,False,Bulk Carrier,SG,Santos,Underway,medium,2026-04-17T07:48:00.252027+00:00,28.999930688333333,False
+3,medium,False,Ro-Ro,LR,Busan,Moored,medium,2026-04-16T09:48:00.252027+00:00,6.999930688333333,False
+3,medium,False,Container Ship,US,Panama,Approaching,medium,2026-04-16T20:48:00.252027+00:00,17.999930688333333,False
+3,medium,False,Container Ship,MH,Shanghai,Approaching,medium,2026-04-16T11:48:00.252027+00:00,8.999930688333334,False
+3,medium,False,Ro-Ro,SG,Rotterdam,At anchor,medium,2026-04-17T04:48:00.252027+00:00,25.999930688333333,True
+3,medium,False,Ro-Ro,MH,Busan,Moored,medium,2026-04-16T10:48:00.252027+00:00,7.999930688333333,True
+3,medium,False,Bulk Carrier,PA,Shanghai,Approaching,medium,2026-04-17T03:48:00.252027+00:00,24.999930688333333,True
+3,medium,False,Tanker,MH,Shanghai,Moored,medium,2026-04-17T16:48:00.252027+00:00,37.999930688333336,False
+3,medium,False,Bulk Carrier,SG,Panama,Underway,medium,2026-04-17T16:48:00.252027+00:00,37.999930688333336,False
+3,medium,False,Bulk Carrier,MH,Busan,Approaching,medium,2026-04-16T03:48:00.252027+00:00,0.9999306883333333,False
+3,medium,False,Tanker,PA,Panama,At anchor,medium,2026-04-16T17:48:00.252027+00:00,14.999930688333334,False
+3,medium,False,Container Ship,SG,Santos,Underway,medium,2026-04-16T14:48:00.252027+00:00,11.999930688333334,True
+3,medium,False,Ro-Ro,SG,Santos,Moored,medium,2026-04-16T14:48:00.252027+00:00,11.999930688333334,True
+3,medium,False,Container Ship,MH,Shanghai,Approaching,medium,2026-04-18T02:48:00.252027+00:00,47.999930688333336,True
+3,medium,False,Bulk Carrier,US,Santos,Underway,medium,2026-04-17T12:48:00.252027+00:00,33.999930688333336,True
+3,medium,False,Tanker,PA,Busan,Approaching,medium,2026-04-17T10:48:00.252027+00:00,31.999930688333333,False
+3,medium,False,Tanker,MH,Santos,Underway,medium,2026-04-16T13:48:00.252027+00:00,10.999930688333334,False
+3,medium,False,Tanker,MH,Busan,Approaching,medium,2026-04-17T14:48:00.252027+00:00,35.999930688333336,True
+3,medium,False,Bulk Carrier,MH,Shanghai,Underway,medium,2026-04-16T11:48:00.252027+00:00,8.999930688333334,True
+3,medium,False,Container Ship,MH,Shanghai,Approaching,medium,2026-04-17T11:48:00.252027+00:00,32.999930688333336,False
+3,medium,False,Bulk Carrier,US,Rotterdam,At anchor,medium,2026-04-17T14:48:00.252027+00:00,35.999930688333336,False
+3,medium,False,Bulk Carrier,PA,Santos,At anchor,medium,2026-04-16T13:48:00.252027+00:00,10.999930688333334,True
+3,medium,False,Bulk Carrier,MH,Rotterdam,Moored,medium,2026-04-17T10:48:00.252027+00:00,31.999930688333333,False
+3,medium,False,Bulk Carrier,MH,Rotterdam,Approaching,medium,2026-04-17T14:48:00.252027+00:00,35.999930688333336,False
+3,medium,False,Container Ship,LR,Rotterdam,At anchor,medium,2026-04-16T23:48:00.252027+00:00,20.999930688333333,False
+3,medium,False,Bulk Carrier,MH,Busan,At anchor,medium,2026-04-17T12:48:00.252027+00:00,33.999930688333336,True
+3,medium,False,Container Ship,SG,Santos,Moored,medium,2026-04-17T15:48:00.252027+00:00,36.999930688333336,False
+3,medium,False,Bulk Carrier,US,Panama,Approaching,medium,2026-04-17T10:48:00.252027+00:00,31.999930688333333,True
