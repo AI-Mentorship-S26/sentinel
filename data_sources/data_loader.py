@@ -75,7 +75,7 @@ def main():
     print_dataset("VESSEL CALLS DATA", vessel_df)
     print_dataset("MERGED DATA", df)
 
-    df.to_csv("final_dataset.csv", index=False)
+    # df.to_csv("final_dataset.csv", index=False)
 
 
 if __name__ == "__main__":
