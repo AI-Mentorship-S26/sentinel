@@ -1,7 +1,11 @@
 """
 satellite_imagery.py
-Data source: Copernicus / Sentinel-2 L2A True Color via WMS.
-Provides get_satellite_imagery(port_name) which returns a PNG file path.
+Fetches Sentinel-2 L1C-TCI imagery aligned with
+mayrajeo/marine-vessel-yolo model requirements.
+
+FIXED:
+- Uses EPSG:3857 (Web Mercator) to avoid WMS 400 errors
+- Correct bounding box projection
 """
 
 import os
@@ -12,20 +16,43 @@ import matplotlib.pyplot as plt
 from PIL import Image
 from io import BytesIO
 from datetime import datetime, timedelta, timezone
+import math
+
 from ports_config import load_ports, get_port
 
 INSTANCE_ID = "8bfa6630-6f4a-4968-b260-7691ee655aa5"
-OUTPUT_DIR = "data_sources/satellite_images/"
+OUTPUT_DIR  = "data_sources/satellite_images/"
+
+# -------------------------------------------------------------------
+# Model-aligned settings
+# -------------------------------------------------------------------
+WMS_LAYER  = "TRUE_COLOR"
+
+# MUST match training patch size
+IMG_WIDTH  = 320
+IMG_HEIGHT = 320
+
+MAX_CC = 20
+BBOX_EXPAND = 0.01
+
+
+# -------------------------------------------------------------------
+# Coordinate conversion (FIX)
+# -------------------------------------------------------------------
+def latlon_to_webmercator(lat, lon):
+    """Convert lat/lon to EPSG:3857"""
+    x = lon * 20037508.34 / 180
+    y = math.log(math.tan((90 + lat) * math.pi / 360)) / (math.pi / 180)
+    y = y * 20037508.34 / 180
+    return x, y
 
 
 def clear_output_dir(port_name: str = None):
     if os.path.exists(OUTPUT_DIR):
         shutil.rmtree(OUTPUT_DIR)
     os.makedirs(OUTPUT_DIR)
-    if port_name:
-        print(f"[SATELLITE] Cleared output folder for: {port_name}")
-    else:
-        print(f"[SATELLITE] Cleared output folder: {OUTPUT_DIR}")
+    label = port_name if port_name else OUTPUT_DIR
+    print(f"[SATELLITE] Cleared output folder: {label}")
 
 
 def get_latest_date() -> str:
@@ -43,57 +70,88 @@ def get_token() -> str:
             "grant_type": "client_credentials",
             "client_id": os.getenv("SH_CLIENT_ID"),
             "client_secret": os.getenv("SH_CLIENT_SECRET"),
-        }
+        },
+        timeout=15,
     )
     response.raise_for_status()
     return response.json()["access_token"]
 
 
 def get_satellite_imagery(port_name: str, date: str = None) -> str | None:
-    """
-    Fetches latest Sentinel-2 true-color imagery for a given port.
-    Always returns the most recent image regardless of cloud cover.
-
-    Args:
-        port_name: Must match a port_name in ports.csv
-        date:      Optional end date "YYYY-MM-DD". Defaults to latest available.
-
-    Returns:
-        Path to saved PNG file, or None if fetch failed.
-    """
     clear_output_dir(port_name)
-    end_date = date if date else get_latest_date()
+
+    end_date   = date if date else get_latest_date()
     start_date = get_start_date()
 
     token = get_token()
-    port = get_port(port_name)
+    port  = get_port(port_name)
 
+    # ---------------------------------------------------------------
+    # Get and validate bbox
+    # ---------------------------------------------------------------
+    min_lat = float(port['min_lat']) - BBOX_EXPAND
+    max_lat = float(port['max_lat']) + BBOX_EXPAND
+    min_lon = float(port['min_lon']) - BBOX_EXPAND
+    max_lon = float(port['max_lon']) + BBOX_EXPAND
+
+    # Ensure correct ordering
+    if min_lat > max_lat:
+        min_lat, max_lat = max_lat, min_lat
+    if min_lon > max_lon:
+        min_lon, max_lon = max_lon, min_lon
+
+    print("\n[DEBUG] Lat/Lon BBOX:")
+    print(min_lat, min_lon, max_lat, max_lon)
+
+    # ---------------------------------------------------------------
+    # Convert to EPSG:3857 (FIX)
+    # ---------------------------------------------------------------
+    min_x, min_y = latlon_to_webmercator(min_lat, min_lon)
+    max_x, max_y = latlon_to_webmercator(max_lat, max_lon)
+
+    bbox = f"{min_x},{min_y},{max_x},{max_y}"
+
+    print("[DEBUG] WebMercator BBOX:")
+    print(bbox)
+
+    # ---------------------------------------------------------------
+    # Build WMS request
+    # ---------------------------------------------------------------
     url = (
         f"https://sh.dataspace.copernicus.eu/ogc/wms/{INSTANCE_ID}"
         f"?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap"
-        f"&LAYERS=TRUE_COLOR"
-        f"&FORMAT=image/png&WIDTH=2048&HEIGHT=2048&CRS=EPSG:4326"
-        f"&BBOX={port['min_lat']},{port['min_lon']},{port['max_lat']},{port['max_lon']}"
+        f"&LAYERS={WMS_LAYER}"
+        f"&FORMAT=image/png"
+        f"&WIDTH={IMG_WIDTH}&HEIGHT={IMG_HEIGHT}"
+        f"&CRS=EPSG:3857"
+        f"&BBOX={bbox}"
         f"&TIME={start_date}/{end_date}"
-        f"&MAXCC=20"
+        f"&MAXCC={MAX_CC}"
     )
 
-    print(f"[SATELLITE] Fetching {port_name} ({start_date} to {end_date})...")
-    response = requests.get(url, headers={"Authorization": f"Bearer {token}"}, timeout=30)
+    print(f"\n[SATELLITE] Fetching {port_name} | {IMG_WIDTH}x{IMG_HEIGHT}px")
+
+    response = requests.get(
+        url,
+        headers={"Authorization": f"Bearer {token}"},
+        timeout=30,
+    )
 
     if response.status_code != 200:
         print(f"[ERROR] {port_name}: HTTP {response.status_code}")
+        print(response.text)  # helpful debug
         return None
 
-    img = np.array(Image.open(BytesIO(response.content)))
+    img = np.array(Image.open(BytesIO(response.content)).convert("RGB"))
+
     safe_name = port_name.replace(" ", "_").replace("/", "-")
     save_path = os.path.join(OUTPUT_DIR, f"{safe_name}_{end_date}.png")
 
-    plt.figure(figsize=(10, 10))
-    plt.imshow(img)
-    plt.axis("off")
-    plt.subplots_adjust(top=1, bottom=0, right=1, left=0, hspace=0, wspace=0)
-    plt.margins(0, 0)
+    fig, ax = plt.subplots(1, figsize=(IMG_WIDTH / 100, IMG_HEIGHT / 100), dpi=100)
+    ax.imshow(img)
+    ax.axis("off")
+
+    plt.subplots_adjust(0, 0, 1, 1)
     plt.savefig(save_path, bbox_inches="tight", pad_inches=0)
     plt.close()
 
@@ -102,13 +160,14 @@ def get_satellite_imagery(port_name: str, date: str = None) -> str | None:
 
 
 def get_all_ports_imagery(date: str = None) -> dict:
-    """Fetches imagery for every port in ports.csv."""
     clear_output_dir()
     df = load_ports()
-    return {row["port_name"]: get_satellite_imagery(row["port_name"], date=date)
-            for _, row in df.iterrows()}
+
+    return {
+        row["port_name"]: get_satellite_imagery(row["port_name"], date)
+        for _, row in df.iterrows()
+    }
 
 
 if __name__ == "__main__":
-    get_satellite_imagery("Port of Houston")  # test single port
-    # get_all_ports_imagery()               # uncomment for all ports
+    get_satellite_imagery("Port of Houston")
