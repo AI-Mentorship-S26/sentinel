@@ -48,3 +48,35 @@ def get_ports_data():
     Optional helper dataset.
     """
     return load_csv("ports.csv")
+
+def print_dataset(name, df):
+    print("\n" + "=" * 80)
+    print(f"{name}")
+    print("=" * 80)
+    print(f"Shape: {df.shape[0]} rows x {df.shape[1]} columns\n")
+
+    with pd.option_context("display.max_rows", None, "display.max_columns", None, "display.width", 200):
+        print(df)
+    print("\n")
+
+def main():
+    print("Loading all datasets...\n")
+
+    avg_df = get_avg_berthing_data()
+    median_df = get_median_berthing_data()
+    teu_df = get_teu_data()
+    vessel_df = get_vessel_calls_data()
+
+    df = teu_df.merge(avg_df, on=["Port"], how="outer").merge(median_df, on=["Port"], how="outer").merge(vessel_df, on=["Port"], how="outer")
+
+    print_dataset("TEU DATA", teu_df)
+    print_dataset("AVERAGE BERTHING DATA", avg_df)
+    print_dataset("MEDIAN BERTHING DATA", median_df)
+    print_dataset("VESSEL CALLS DATA", vessel_df)
+    print_dataset("MERGED DATA", df)
+
+    # df.to_csv("final_dataset.csv", index=False)
+
+
+if __name__ == "__main__":
+    main()
