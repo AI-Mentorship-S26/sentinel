@@ -1,69 +1,47 @@
 """
 satellite_imagery.py
-Fetches Sentinel-2 L1C-TCI imagery aligned with
-mayrajeo/marine-vessel-yolo model requirements.
-
-FIXED:
-- Uses EPSG:3857 (Web Mercator) to avoid WMS 400 errors
-- Correct bounding box projection
+Fetch Sentinel-2 imagery with cloud filtering and near-realtime fallback.
 """
 
 import os
 import shutil
 import requests
 import numpy as np
-import matplotlib.pyplot as plt
-from PIL import Image
+from PIL import Image, ImageEnhance
 from io import BytesIO
 from datetime import datetime, timedelta, timezone
 import math
+import re
+import sys
 
 from ports_config import load_ports, get_port
 
 INSTANCE_ID = "8bfa6630-6f4a-4968-b260-7691ee655aa5"
 OUTPUT_DIR  = "data_sources/satellite_images/"
 
-# -------------------------------------------------------------------
-# Model-aligned settings
-# -------------------------------------------------------------------
 WMS_LAYER  = "TRUE_COLOR"
-
-# MUST match training patch size
-IMG_WIDTH  = 320
-IMG_HEIGHT = 320
-
-MAX_CC = 20
-BBOX_EXPAND = 0.01
+IMG_WIDTH  = 2048
+IMG_HEIGHT = 2048
+MAX_CC     = 10
 
 
-# -------------------------------------------------------------------
-# Coordinate conversion (FIX)
-# -------------------------------------------------------------------
+# -------------------------------
+# Helpers
+# -------------------------------
+
 def latlon_to_webmercator(lat, lon):
-    """Convert lat/lon to EPSG:3857"""
     x = lon * 20037508.34 / 180
     y = math.log(math.tan((90 + lat) * math.pi / 360)) / (math.pi / 180)
     y = y * 20037508.34 / 180
     return x, y
 
 
-def clear_output_dir(port_name: str = None):
+def clear_output_dir():
     if os.path.exists(OUTPUT_DIR):
         shutil.rmtree(OUTPUT_DIR)
     os.makedirs(OUTPUT_DIR)
-    label = port_name if port_name else OUTPUT_DIR
-    print(f"[SATELLITE] Cleared output folder: {label}")
 
-
-def get_latest_date() -> str:
-    return (datetime.now(timezone.utc) - timedelta(days=3)).strftime("%Y-%m-%d")
-
-
-def get_start_date() -> str:
-    return (datetime.now(timezone.utc) - timedelta(days=30)).strftime("%Y-%m-%d")
-
-
-def get_token() -> str:
+def get_token():
     response = requests.post(
         "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token",
         data={
@@ -77,97 +55,128 @@ def get_token() -> str:
     return response.json()["access_token"]
 
 
-def get_satellite_imagery(port_name: str, date: str = None) -> str | None:
-    clear_output_dir(port_name)
+def remove_watermark(img: np.ndarray):
+    return img[:-60, :, :]
 
-    end_date   = date if date else get_latest_date()
-    start_date = get_start_date()
 
-    token = get_token()
-    port  = get_port(port_name)
+def sanitize_filename(name: str):
+    return re.sub(r"[^a-zA-Z0-9_]", "_", name.replace(" ", "_"))
 
-    # ---------------------------------------------------------------
-    # Get and validate bbox
-    # ---------------------------------------------------------------
-    min_lat = float(port['min_lat']) - BBOX_EXPAND
-    max_lat = float(port['max_lat']) + BBOX_EXPAND
-    min_lon = float(port['min_lon']) - BBOX_EXPAND
-    max_lon = float(port['max_lon']) + BBOX_EXPAND
 
-    # Ensure correct ordering
-    if min_lat > max_lat:
-        min_lat, max_lat = max_lat, min_lat
-    if min_lon > max_lon:
-        min_lon, max_lon = max_lon, min_lon
+def enhance_image(img: np.ndarray):
+    pil_img = Image.fromarray(img)
 
-    print("\n[DEBUG] Lat/Lon BBOX:")
-    print(min_lat, min_lon, max_lat, max_lon)
+    # Increase contrast
+    pil_img = ImageEnhance.Contrast(pil_img).enhance(1.5)
 
-    # ---------------------------------------------------------------
-    # Convert to EPSG:3857 (FIX)
-    # ---------------------------------------------------------------
+    # Slight brightness boost
+    pil_img = ImageEnhance.Brightness(pil_img).enhance(1.1)
+
+    return np.array(pil_img)
+
+
+# -------------------------------
+# Core Fetch Function
+# -------------------------------
+
+def fetch_image_for_date(port, port_name, date, token):
+    min_lat = float(port['min_lat'])
+    max_lat = float(port['max_lat'])
+    min_lon = float(port['min_lon'])
+    max_lon = float(port['max_lon'])
+
     min_x, min_y = latlon_to_webmercator(min_lat, min_lon)
     max_x, max_y = latlon_to_webmercator(max_lat, max_lon)
 
     bbox = f"{min_x},{min_y},{max_x},{max_y}"
 
-    print("[DEBUG] WebMercator BBOX:")
-    print(bbox)
-
-    # ---------------------------------------------------------------
-    # Build WMS request
-    # ---------------------------------------------------------------
     url = (
         f"https://sh.dataspace.copernicus.eu/ogc/wms/{INSTANCE_ID}"
-        f"?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap"
+        f"?SERVICE=WMS&REQUEST=GetMap"
         f"&LAYERS={WMS_LAYER}"
         f"&FORMAT=image/png"
         f"&WIDTH={IMG_WIDTH}&HEIGHT={IMG_HEIGHT}"
         f"&CRS=EPSG:3857"
         f"&BBOX={bbox}"
-        f"&TIME={start_date}/{end_date}"
+        f"&TIME={date}"
         f"&MAXCC={MAX_CC}"
     )
 
-    print(f"\n[SATELLITE] Fetching {port_name} | {IMG_WIDTH}x{IMG_HEIGHT}px")
+    print(f"[TRY] {port_name} @ {date}")
 
-    response = requests.get(
-        url,
-        headers={"Authorization": f"Bearer {token}"},
-        timeout=30,
-    )
+    response = requests.get(url, headers={"Authorization": f"Bearer {token}"})
 
     if response.status_code != 200:
-        print(f"[ERROR] {port_name}: HTTP {response.status_code}")
-        print(response.text)  # helpful debug
         return None
 
     img = np.array(Image.open(BytesIO(response.content)).convert("RGB"))
+    img = remove_watermark(img)
 
-    safe_name = port_name.replace(" ", "_").replace("/", "-")
-    save_path = os.path.join(OUTPUT_DIR, f"{safe_name}_{end_date}.png")
+    # Reject bad images
+    if img.mean() < 20:
+        print(f"[SKIP] Too dark/cloudy ({img.mean():.2f})")
+        return None
 
-    fig, ax = plt.subplots(1, figsize=(IMG_WIDTH / 100, IMG_HEIGHT / 100), dpi=100)
-    ax.imshow(img)
-    ax.axis("off")
+    img = enhance_image(img)
 
-    plt.subplots_adjust(0, 0, 1, 1)
-    plt.savefig(save_path, bbox_inches="tight", pad_inches=0)
-    plt.close()
+    safe_name = sanitize_filename(port_name)
+    path = os.path.join(OUTPUT_DIR, f"{safe_name}_{date}.png")
 
-    print(f"[SATELLITE] Saved: {save_path}")
-    return save_path
+    Image.fromarray(img).save(path)
+    print(f"[SAVE] {path}")
+
+    return path
 
 
-def get_all_ports_imagery(date: str = None) -> dict:
+# -------------------------------
+# Near-Realtime Logic
+# -------------------------------
+
+def get_realtime_image(port_name: str):
+    port = get_port(port_name)
+    token = get_token()
+
+    #search last 10 days (most recent first)
+    for days_back in range(0, 10):
+        date = (datetime.now(timezone.utc) - timedelta(days=days_back)).strftime("%Y-%m-%d")
+
+        path = fetch_image_for_date(port, port_name, date, token)
+
+        if path:
+            print(f"[SUCCESS] Using {date}")
+            return path
+
+    print(f"[FAIL] No good image found for {port_name}")
+    return None
+
+
+# -------------------------------
+# Multi-Port Processing
+# -------------------------------
+
+def get_all_ports_imagery():
     clear_output_dir()
-    df = load_ports()
 
-    return {
-        row["port_name"]: get_satellite_imagery(row["port_name"], date)
-        for _, row in df.iterrows()
-    }
+    ports_df = load_ports()
+    results = {}
 
+    for _, row in ports_df.iterrows():
+        port_name = row["port_name"]
+
+        try:
+            path = get_realtime_image(port_name)
+            results[port_name] = path
+        except Exception as e:
+            print(f"[ERROR] {port_name}: {e}")
+            results[port_name] = None
+
+    return results
+
+
+# -------------------------------
+# Entry Point
+# -------------------------------
 
 if __name__ == "__main__":
-    get_satellite_imagery("Port of Houston")
+    clear_output_dir()
+    get_realtime_image("Port of Houston")

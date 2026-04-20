@@ -1,6 +1,6 @@
 """
 ship_detection.py
-Ship detection using mayrajeo/marine-vessel-yolo (YOLO11)
+Ship detection using YOLO (marine-vessel-yolo)
 """
 
 from ultralytics import YOLO
@@ -11,99 +11,141 @@ from PIL import Image
 import os
 import torch
 
-# -------------------------------------------------------------------
-# Model config
-# -------------------------------------------------------------------
 MODEL_URL  = "https://huggingface.co/mayrajeo/marine-vessel-yolo/resolve/main/yolo11s_tci.pt"
 MODEL_FILE = "models/yolo11s_tci.pt"
-
 IMAGE_DIR  = "data_sources/satellite_images"
 OUTPUT_DIR = "outputs/detections"
 
 os.makedirs("models", exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# -------------------------------------------------------------------
-# Inference settings (aligned with model)
-# -------------------------------------------------------------------
-INFER_IMGSZ = 640   # model upsamples 320 → 640
-INFER_CONF  = 0.25
-DEVICE      = "cuda" if torch.cuda.is_available() else "cpu"
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 
-def load_model() -> YOLO:
+def load_model():
     if not os.path.exists(MODEL_FILE):
-        print("[MODEL] Downloading model...")
         model = YOLO(MODEL_URL)
         model.save(MODEL_FILE)
     else:
-        print("[MODEL] Loading cached model...")
         model = YOLO(MODEL_FILE)
 
     model.to(DEVICE)
-    print(f"[MODEL] Using device: {DEVICE}")
     return model
 
 
-def detect_ships(image_path: str, model: YOLO) -> dict:
-    print(f"[DETECT] {os.path.basename(image_path)}")
+def detect_ships(image_path, model):
+    print(f"[DETECT] {image_path}")
 
-    results = model.predict(
-        source=image_path,
-        conf=INFER_CONF,
-        imgsz=INFER_IMGSZ,
-        device=DEVICE,
-        verbose=False,
-    )
-
-    result = results[0]
-    ship_count = len(result.boxes) if result.boxes is not None else 0
-
-    print(f"[DETECT] Ships detected: {ship_count}")
-
-    # Visualization
     img = np.array(Image.open(image_path).convert("RGB"))
+    h, w = img.shape[:2]
+
+    img = np.array(Image.fromarray(img).resize((2560, 2560)))
+
+    H, W = img.shape[:2]
+
+    patch_size = 320
+    stride = 160
+
+    all_boxes = []
+
+    for y in range(0, H - patch_size, stride):
+        for x in range(0, W - patch_size, stride):
+
+            patch = img[y:y+patch_size, x:x+patch_size]
+
+            results = model.predict(
+                source=patch,
+                conf=0.01,
+                imgsz=640,
+                device=DEVICE,
+                verbose=False
+            )
+
+            boxes = results[0].boxes
+
+            if boxes is None or len(boxes) == 0:
+                continue
+
+            for box in boxes:
+                cls = int(box.cls[0].item()) if box.cls is not None else 0
+
+                # Only keep ship class
+                if cls != 0:
+                    continue
+
+                x1, y1, x2, y2 = box.xyxy[0].tolist()
+                conf = box.conf[0].item()
+
+                
+                all_boxes.append([
+                    x1 + x,
+                    y1 + y,
+                    x2 + x,
+                    y2 + y,
+                    conf
+                ])
+
+    print(f"[DEBUG] Raw detections: {len(all_boxes)}")
+
+
+    def nms(boxes, iou_threshold=0.4):
+        if len(boxes) == 0:
+            return []
+
+        boxes = np.array(boxes)
+        x1, y1, x2, y2, scores = boxes.T
+
+        areas = (x2 - x1) * (y2 - y1)
+        order = scores.argsort()[::-1]
+
+        keep = []
+
+        while order.size > 0:
+            i = order[0]
+            keep.append(boxes[i])
+
+            xx1 = np.maximum(x1[i], x1[order[1:]])
+            yy1 = np.maximum(y1[i], y1[order[1:]])
+            xx2 = np.minimum(x2[i], x2[order[1:]])
+            yy2 = np.minimum(y2[i], y2[order[1:]])
+
+            inter_w = np.maximum(0, xx2 - xx1)
+            inter_h = np.maximum(0, yy2 - yy1)
+            inter = inter_w * inter_h
+
+            iou = inter / (areas[i] + areas[order[1:]] - inter)
+
+            inds = np.where(iou <= iou_threshold)[0]
+            order = order[inds + 1]
+
+        return keep
+
+    final_boxes = nms(all_boxes)
+
+    print(f"[DETECT] Ships detected: {len(final_boxes)}")
+
+
     fig, ax = plt.subplots(1, figsize=(8, 8))
     ax.imshow(img)
 
-    # Masks
-    if result.masks is not None:
-        for mask in result.masks.data:
-            mask_np = mask.cpu().numpy()
+    for (x1, y1, x2, y2, conf) in final_boxes:
+        rect = patches.Rectangle(
+            (x1, y1),
+            x2 - x1,
+            y2 - y1,
+            linewidth=1.5,
+            edgecolor="red",
+            facecolor="none"
+        )
+        ax.add_patch(rect)
 
-            mask_resized = np.array(
-                Image.fromarray((mask_np * 255).astype(np.uint8)).resize(
-                    (img.shape[1], img.shape[0]), Image.NEAREST
-                )
-            ) / 255.0
-
-            colored = np.zeros((*mask_resized.shape, 4))
-            colored[mask_resized > 0.5] = [1, 0, 0, 0.4]
-            ax.imshow(colored)
-
-    # Boxes
-    if result.boxes is not None:
-        for box in result.boxes:
-            x1, y1, x2, y2 = box.xyxy[0].tolist()
-            conf = box.conf[0].item()
-
-            rect = patches.Rectangle(
-                (x1, y1),
-                x2 - x1,
-                y2 - y1,
-                linewidth=1.5,
-                edgecolor="red",
-                facecolor="none"
-            )
-            ax.add_patch(rect)
-
-            ax.text(
-                x1, y1 - 3,
-                f"{conf:.2f}",
-                color="white",
-                fontsize=7,
-                bbox=dict(facecolor="black", alpha=0.5, pad=1)
-            )
+        ax.text(
+            x1, y1 - 3,
+            f"{conf:.2f}",
+            color="white",
+            fontsize=7,
+            bbox=dict(facecolor="black", alpha=0.5, pad=1)
+        )
 
     ax.axis("off")
 
@@ -116,33 +158,55 @@ def detect_ships(image_path: str, model: YOLO) -> dict:
     plt.close()
 
     return {
-        "ship_count": ship_count,
+        "ship_count": len(final_boxes),
         "save_path": save_path
     }
 
 
-def detect_ships_for_port(port_name: str, model: YOLO = None) -> dict:
+def detect_latest(port_name, model=None):
     if model is None:
         model = load_model()
 
-    safe_name = port_name.replace(" ", "_").replace("/", "-")
+    safe_name = (
+    port_name
+    .replace(" ", "_")
+    .replace("/", "_")
+    .replace("(", "_")
+    .replace(")", "_")
+)
+    files = [f for f in os.listdir(IMAGE_DIR) if f.startswith(safe_name)]
 
-    matches = [
-        f for f in os.listdir(IMAGE_DIR)
-        if f.startswith(safe_name)
-    ]
-
-    if not matches:
-        print(f"[ERROR] No image found for {port_name}")
+    if not files:
         return {"ship_count": 0, "save_path": None}
 
-    image_path = os.path.join(IMAGE_DIR, sorted(matches)[-1])
-    return detect_ships(image_path, model)
+    path = os.path.join(IMAGE_DIR, sorted(files)[-1])
+    return detect_ships(path, model) 
 
+def detect_all_images(model=None):
+    if model is None:
+        model = load_model()
+
+    results = {}
+
+    files = [f for f in os.listdir(IMAGE_DIR) if f.endswith(".png")]
+
+    if not files:
+        print("[ERROR] No images found in folder")
+        return results
+
+    for file in files:
+        image_path = os.path.join(IMAGE_DIR, file)
+
+        try:
+            print(f"\n[PROCESSING] {file}")
+            result = detect_ships(image_path, model)
+            results[file] = result
+        except Exception as e:
+            print(f"[ERROR] {file}: {e}")
+            results[file] = None
+
+    return results
 
 if __name__ == "__main__":
     model = load_model()
-    result = detect_ships_for_port("Port of Houston", model)
-
-    print(f"\nShips: {result['ship_count']}")
-    print(f"Output: {result['save_path']}")
+    detect_all_images(model)
