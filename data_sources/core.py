@@ -1,4 +1,4 @@
-"""Core port intelligence engine.
+git """Core port intelligence engine.
 
 MAIN MODULES:
   1. PortResolver: Maps port names/codes to Port objects with scope enforcement
