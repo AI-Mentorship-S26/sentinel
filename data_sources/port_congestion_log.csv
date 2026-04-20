@@ -1,0 +1,24 @@
+timestamp,port_name,vessel_count,anchored_count,moored_count,avg_speed
+2026-04-18 08:49,Port of Houston,10,0,0,1.73
+2026-04-18 08:49,Port Arthur / Beaumont,10,0,4,1.2
+2026-04-18 08:49,Port of Galveston,4,0,0,1.15
+2026-04-18 08:49,Port of Tampa Bay,10,0,2,0.0
+2026-04-18 08:49,Port of New York / New Jersey,10,1,0,5.77
+2026-04-18 08:49,Port of Baltimore,10,0,5,0.01
+2026-04-18 08:49,Port of Virginia (Norfolk),10,0,0,6.75
+2026-04-18 08:49,Port of Savannah,10,0,1,11.55
+2026-04-18 08:49,Port of Charleston,2,0,1,0.0
+2026-04-18 08:49,Port Everglades (Fort Lauderdale),10,1,6,0.01
+2026-04-18 08:49,Port of Miami,10,0,0,1.23
+2026-04-18 08:49,Port of Port Canaveral,6,0,0,1.97
+2026-04-18 08:49,Port of Los Angeles,10,0,1,0.03
+2026-04-18 08:49,Port of Long Beach,10,0,5,0.16
+2026-04-18 08:49,Port of San Diego,6,0,2,0.0
+2026-04-18 08:49,Port of San Francisco,10,0,3,0.12
+2026-04-18 08:49,Port of Oakland,10,0,3,0.23
+2026-04-18 08:49,Port of Seattle,10,0,0,1.05
+2026-04-18 08:49,Port of Tacoma,5,1,2,0.0
+2026-04-18 08:49,Port of Portland (OR),10,0,3,2.0
+2026-04-18 08:49,Port of Chicago,2,0,2,0.15
+2026-04-19 22:02,Port of Houston,10,0,1,0.93
+2026-04-19 22:02,Port Arthur / Beaumont,10,0,0,0.86
