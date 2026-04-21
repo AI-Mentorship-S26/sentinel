@@ -11,10 +11,15 @@ from datetime import datetime, timezone
 # Configuration & Constants
 # ---------------------------------------------------------------------------
 
+# Configuration & Constants
 load_dotenv()
 API_KEY = os.getenv("AISSTREAM_API_KEY")
-PORTS_CSV = "data_sources/CSV Files/ports.csv"
-LOG_FILE = "data_sources/port_congestion_log.csv"
+
+# Fix the folder name to CSV_Files (with the underscore!)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+PORTS_CSV = os.path.join(BASE_DIR, "CSV_Files", "ports.csv")
+LOG_FILE = os.path.join(BASE_DIR, "port_congestion_log.csv")
+'''LOG_FILE = "data_sources/port_congestion_log.csv"'''
 
 NAV_STATUS = {
     0:  "Underway (Engine)",

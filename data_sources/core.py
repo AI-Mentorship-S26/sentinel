@@ -1,4 +1,4 @@
-git """Core port intelligence engine.
+'''git """Core port intelligence engine.
 
 MAIN MODULES:
   1. PortResolver: Maps port names/codes to Port objects with scope enforcement
@@ -24,7 +24,7 @@ SCOPE:
   - 25 major US ports included
   - Live API with fallback to deterministic mock data
   - 5-minute data freshness targets for real-time tracking
-"""
+"""'''
 from __future__ import annotations
 
 import hashlib
