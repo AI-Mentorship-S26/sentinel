@@ -52,6 +52,8 @@ def get_congestion_score(port_name: str):
         print(f"Port: {port_name}")
         print(f"Predicted congestion score: {prediction:.6f}")
 
+        return prediction
+
     except Exception as e:
         print(f"Error: {e}")
         sys.exit(1)
