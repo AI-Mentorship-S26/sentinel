@@ -34,13 +34,11 @@ def predict_congestion(model, total_teu, avg_berthing, median_berthing, calls):
     return prediction
 
 
-def main():
+def get_congestion_score(port_name: str):
     try:
         model = load_model(MODEL_PATH)
 
         df = pd.read_csv(BASE_DIR / "final_dataset.csv")
-
-        port_name = "Port of Seattle"  # change this
 
         port_data = df[df["Port"] == port_name]
 
@@ -54,10 +52,8 @@ def main():
         print(f"Port: {port_name}")
         print(f"Predicted congestion score: {prediction:.6f}")
 
+        return prediction
+
     except Exception as e:
         print(f"Error: {e}")
         sys.exit(1)
-
-
-if __name__ == "__main__":
-    main()
