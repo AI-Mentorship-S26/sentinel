@@ -11,6 +11,12 @@ venv/
 # VS Code settings
 .vscode/
 
-satellite_images/
-
-app/
+satellite_images/.DS_Store
+data_sources/port_crime.log
+data_sources/output/
+data_sources/cargo_theft_all_years.csv
+data_sources/cargo_theft_port_relevant.csv
+data_sources/CSV Files/cargo_theft_all_years.csv
+data_sources/CSV Files/cargo_theft_port_relevant.csv
+.DS_Store
+.venv/

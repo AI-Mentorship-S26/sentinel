@@ -42,6 +42,9 @@ def get_combined_sentinel_data(port_name):
     # Clean up: Remove any duplicate columns that might appear in both APIs
     combined_df = combined_df.loc[:, ~combined_df.columns.duplicated()]
     
+    # Add this line so the model knows which port this row belongs to
+    combined_df['port_name'] = port_name
+    
     # Fill missing values with 0 so the Random Forest doesn't crash
     return combined_df.fillna(0)
 
