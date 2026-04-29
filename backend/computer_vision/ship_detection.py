@@ -21,6 +21,20 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
+# Min-max normalization constants
+SHIP_MIN = 0
+SHIP_MAX = 50  # max ships seen at peak congestion (LA/Long Beach 2021 backlog)
+
+def normalize_ship_count(ship_count: int) -> float:
+    """
+    Normalizes ship count to a 0-1 scale using min-max normalization.
+    0 = no ships, 1 = maximum congestion
+    """
+    if ship_count <= SHIP_MIN:
+        return 0.0
+    if ship_count >= SHIP_MAX:
+        return 1.0
+    return round((ship_count - SHIP_MIN) / (SHIP_MAX - SHIP_MIN), 4)
 
 def load_model():
     if not os.path.exists(MODEL_FILE):
@@ -155,12 +169,15 @@ def detect_ships(image_path, model):
     )
 
     plt.savefig(save_path, bbox_inches="tight", pad_inches=0)
-    plt.close()
+    plt.close() 
+
+    print(f"[SCORE] Congestion score: {normalize_ship_count(len(final_boxes))}")
 
     return {
-        "ship_count": len(final_boxes),
-        "save_path": save_path
-    }
+    "ship_count":       len(final_boxes),
+    "congestion_score": normalize_ship_count(len(final_boxes)),
+    "save_path":        save_path
+}
 
 
 def detect_latest(port_name, model=None):
@@ -205,7 +222,11 @@ def detect_all_images(model=None):
             print(f"[ERROR] {file}: {e}")
             results[file] = None
 
-    return results
+    return results 
+
+
+
+
 
 if __name__ == "__main__":
     model = load_model()
