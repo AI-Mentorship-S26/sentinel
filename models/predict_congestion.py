@@ -40,20 +40,31 @@ def get_congestion_score(port_name: str):
 
         df = pd.read_csv(BASE_DIR / "final_dataset.csv")
 
-        port_data = df[df["Port"].str.lower() == port_name.lower()]
+        port_data = df[df["Port"] == port_name]
 
         if port_data.empty:
             print(f"Port not found: {port_name}")
-            return None
+            return
 
         prediction = model.predict(port_data[FEATURE_COLUMNS])[0]
 
         print("\n=== CONGESTION PREDICTION ===")
         print(f"Port: {port_name}")
-        print(f"Predicted congestion score: {prediction:.6f}")
+        # print(f"Predicted congestion score: {prediction:.6f}")
 
         return prediction
 
     except Exception as e:
         print(f"Error: {e}")
         sys.exit(1)
+
+if __name__ == "__main__":
+    print(get_congestion_score("Port of Charleston"))
+    print(get_congestion_score("Port of Houston"))
+    print(get_congestion_score("Port of Long Beach"))
+    print(get_congestion_score("Port of Los Angeles"))
+    print(get_congestion_score("Port of New York / New Jersey"))
+    print(get_congestion_score("Port of Oakland"))
+    print(get_congestion_score("Port of Savannah"))
+    print(get_congestion_score("Port of Seattle"))
+    print(get_congestion_score("Port of Virginia (Norfolk)"))
