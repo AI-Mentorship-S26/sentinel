@@ -80,10 +80,12 @@ def time_decay_weight(published_date, half_life_days=3):
     Exponential decay:
     Newer articles matter more than older ones.
     """
+    published_date = pd.to_datetime(published_date, errors="coerce", utc=True)
     if pd.isna(published_date):
         return 1.0
 
-    age_days = (datetime.utcnow() - published_date).days
+    now_utc = pd.Timestamp.now(tz="UTC")
+    age_days = (now_utc - published_date).days
     return 0.5 ** (age_days / half_life_days)
 
 # ── ARTICLE SCORING ──────────────────────────────────────────
@@ -152,8 +154,8 @@ def compute_port_score(article_df: pd.DataFrame) -> dict:
 def score_port(port_name: str, news_df: Optional[pd.DataFrame] = None, max_pages: int = 3):
 
     if news_df is None:
-        sys.path.insert(0, str(Path(__file__).parent))
-        from news import get_news
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+        from data_sources.news import get_news
 
         print(f"Fetching news for {port_name}...")
         news_df = get_news(port_name, max_pages=max_pages)
@@ -173,7 +175,7 @@ def score_port(port_name: str, news_df: Optional[pd.DataFrame] = None, max_pages
         scores = score_article(title, existing_score)
 
         # ── APPLY TIME DECAY ──
-        published = pd.to_datetime(row.get("published"), errors="coerce")
+        published = pd.to_datetime(row.get("published"), errors="coerce", utc=True)
         decay = time_decay_weight(published)
 
         scores["decay_weight"] = decay
@@ -207,11 +209,12 @@ def score_port(port_name: str, news_df: Optional[pd.DataFrame] = None, max_pages
     return article_df, daily_df, weekly_df, port_summary
 
 # ── ALL PORTS ────────────────────────────────────────────────
-def score_all_ports(ports_file="CSV Files/ports.csv", max_pages=2):
+def score_all_ports(ports_file=None, max_pages=2):
+    if ports_file is None:
+        ports_file = Path(__file__).resolve().parents[1] / "data_sources" / "CSV_Files" / "ports.csv"
 
     ports_df = pd.read_csv(ports_file)
     port_names = ports_df["port_name"].tolist()
-
     all_articles = []
     all_daily = []
     all_weekly = []
@@ -248,4 +251,3 @@ def score_all_ports(ports_file="CSV Files/ports.csv", max_pages=2):
 if __name__ == "__main__":
     score_all_ports()
 
-    

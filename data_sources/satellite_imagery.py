@@ -12,7 +12,6 @@ from io import BytesIO
 from datetime import datetime, timedelta, timezone
 import math
 import re
-import sys
 
 from ports_config import load_ports, get_port
 
@@ -178,5 +177,4 @@ def get_all_ports_imagery():
 # -------------------------------
 
 if __name__ == "__main__":
-    clear_output_dir()
     get_realtime_image("Port of Houston")

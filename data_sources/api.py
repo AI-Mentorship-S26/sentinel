@@ -4,9 +4,12 @@ from pathlib import Path
 import sys
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Add models + aggregator paths
 sys.path.append(str(BASE_DIR / "models"))
 
-from predict_congestion import get_congestion_score
+# Import aggregator instead of direct model
+from score_aggregator import get_final_port_score
 
 app = FastAPI()
 
@@ -24,7 +27,7 @@ def home():
 
 @app.get("/predict/{port_name}")
 def predict(port_name: str):
-    score = get_congestion_score(port_name)
+    score = get_final_port_score(port_name)
 
     if score is None:
         return {"error": "Port not found"}
