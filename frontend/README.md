@@ -7,17 +7,26 @@
   Download Node.js and add to PATH
   Check npm -v
 
-  Run 'pip install npm'
+  Run 'pip install npm' (maybe unecessary)
 
 
-  ## Running the code
-  cd to frontend folder
-
+  ## Setup
   Run `npm i` to install the dependencies.
 
   Run 'Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned' if scripts error appears
-
-  Run `npm run dev` to start the development server.
-
-  Copy link and paste into web browser
   
+
+  ## To Run:
+
+  Backend:
+  cd data_sources
+
+  Run `python -m uvicorn api:app --reload`
+
+  
+  Frontend:
+  cd frontend
+
+  Run `npm run dev`
+
+  Copy and paste the http link into browser
