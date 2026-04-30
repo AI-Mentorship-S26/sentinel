@@ -21,6 +21,6 @@ data_sources/CSV Files/cargo_theft_port_relevant.csv
 .DS_Store
 .venv/
 
-# Node
+# Nodegit push o
 frontend/node_modules/
 node_modules/

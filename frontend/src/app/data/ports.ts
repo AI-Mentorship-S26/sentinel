@@ -125,12 +125,12 @@ export const PORT_DATA: Record<string, PortData> = {
       },
     ],
     risks: {
-      overall: "low",
+      overall: "moderate",
       categories: [
         {
           name: "Security",
-          level: "low",
-          description: "Enhanced screening procedures in place.",
+          level: "moderate",
+          description: "Enhanced screening procedures in place due to higher cargo volume.",
         },
         {
           name: "Weather",
@@ -139,8 +139,13 @@ export const PORT_DATA: Record<string, PortData> = {
         },
         {
           name: "Labor",
-          level: "low",
-          description: "Stable workforce relations.",
+          level: "moderate",
+          description: "Occassional slowdowns due to workforce constraints.",
+        },
+        {
+          name: "Congestion",
+          level: "high",
+          description: "Significant vessel backlog and extended berthing delays."
         },
       ],
     },
@@ -180,12 +185,12 @@ export const PORT_DATA: Record<string, PortData> = {
       },
     ],
     risks: {
-      overall: "low",
+      overall: "high",
       categories: [
         {
           name: "Security",
-          level: "low",
-          description: "Standard security protocols in effect.",
+          level: "moderate",
+          description: "Elevated cargo volume increases monitoring requirements.",
         },
         {
           name: "Weather",
@@ -195,7 +200,12 @@ export const PORT_DATA: Record<string, PortData> = {
         {
           name: "Labor",
           level: "low",
-          description: "Stable workforce.",
+          description: "Workforce strain due to sustained high operational demand.",
+        },
+        {
+          name: "Congestion",
+          level: "high",
+          description: "Heavy vessel backlog and extended berthing delays observed.",
         },
       ],
     },
@@ -455,22 +465,27 @@ export const PORT_DATA: Record<string, PortData> = {
       },
     ],
     risks: {
-      overall: "low",
+      overall: "moderate",
       categories: [
         {
           name: "Security",
           level: "low",
-          description: "Comprehensive security protocols active.",
+          description: "Strong security presence with no significant incidents reported.",
         },
         {
           name: "Weather",
-          level: "low",
-          description: "Hurricane season preparations underway.",
+          level: "moderate",
+          description: "Seasonal variability may cause occasional disruptions.",
         },
         {
           name: "Labor",
           level: "low",
           description: "Strong workforce availability.",
+        },
+        {
+          name: "Congestion",
+          level: "moderate",
+          description: "Increased vessel traffic leading to moderate berth wait times.",
         },
       ],
     },

@@ -8,7 +8,7 @@ from typing import Any
 import pandas as pd
 
 from core import PortIntelligenceService
-from models import PortQueryRequest, QueryFilters
+from data_sources.models import PortQueryRequest, QueryFilters
 
 
 def get_marine_traffic_data(port_input: str) -> pd.DataFrame:

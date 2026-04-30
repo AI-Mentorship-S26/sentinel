@@ -9,7 +9,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 sys.path.append(str(BASE_DIR / "models"))
 
 # Import aggregator instead of direct model
-from score_aggregator import get_final_port_score
+from models.score_aggregator import get_final_port_score
 
 app = FastAPI()
 
@@ -25,7 +25,7 @@ app.add_middleware(
 def home():
     return {"message": "API working"}
 
-@app.get("/predict/{port_name}")
+@app.get("/predict")
 def predict(port_name: str):
     score = get_final_port_score(port_name)
 
@@ -36,3 +36,17 @@ def predict(port_name: str):
         "port": port_name,
         "congestion_score": float(score)
     }
+
+
+# # TEST ENDPOINT
+# @app.get("/test-risk")
+# def test_risk():
+#     return {
+#         "port": "Los Angeles",
+#         "risks": {
+#             "overall": "moderate",
+#             "congestion": "high",
+#             "crime": "low",
+#             "weather": "moderate"
+#         }
+#     }

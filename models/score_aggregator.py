@@ -39,7 +39,7 @@ def get_final_port_score(port_name):
         #     scores.append(ml_score_normalized)
     
     final_score = (
-        0.60 * throughput_congestion_score +
+        0.65 * throughput_congestion_score +
         0.30 * ml_score +
         0.10 * crime_score
 )

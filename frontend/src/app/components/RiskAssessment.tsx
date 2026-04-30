@@ -28,42 +28,78 @@ const RISK_CONFIG = {
   },
 };
 
+type RiskLevel = keyof typeof RISK_CONFIG;
+
+function normalizeLevel(level: string): RiskLevel {
+  const normalized = level.toLowerCase();
+
+  if (
+    normalized === "low" ||
+    normalized === "moderate" ||
+    normalized === "high" ||
+    normalized === "critical"
+  ) {
+    return normalized;
+  }
+
+  return "low";
+}
+
 export function RiskAssessment({ risks }: RiskAssessmentProps) {
-  const overallConfig = RISK_CONFIG[risks.overall];
+  const overallLevel = normalizeLevel(risks.overall);
+  const overallConfig = RISK_CONFIG[overallLevel];
 
   return (
     <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-6">
-      <div className="flex items-center gap-2 mb-6">
-        <Shield className="w-4 h-4 text-zinc-400" />
+      <div className="mb-6 flex items-center gap-2">
+        <Shield className="h-4 w-4 text-zinc-400" />
         <p className="text-sm text-zinc-400">Risk Assessment</p>
       </div>
 
       {/* Overall Risk */}
-      <div className={`rounded-lg border ${overallConfig.border} ${overallConfig.bg} p-4 mb-6`}>
-        <p className="text-xs text-zinc-400 mb-1">Overall Risk Level</p>
-        <p className={`text-xl capitalize ${overallConfig.color}`}>{risks.overall}</p>
+      <div
+        className={`mb-6 rounded-lg border p-4 ${overallConfig.border} ${overallConfig.bg}`}
+      >
+        <p className="mb-1 text-xs text-zinc-400">Overall Risk Level</p>
+        <p className={`text-xl capitalize ${overallConfig.color}`}>
+          {overallLevel}
+        </p>
       </div>
 
       {/* Risk Categories */}
       <div className="space-y-4">
         {risks.categories.map((category, index) => {
-          const config = RISK_CONFIG[category.level];
+          const level = normalizeLevel(category.level);
+          const config = RISK_CONFIG[level];
+
           return (
-            <div key={index} className="pb-4 border-b border-zinc-800 last:border-b-0 last:pb-0">
-              <div className="flex items-start justify-between mb-2">
+            <div
+              key={index}
+              className="border-b border-zinc-800 pb-4 last:border-b-0 last:pb-0"
+            >
+              <div className="mb-2 flex items-start justify-between">
                 <div className="flex items-center gap-2">
-                  {category.level === "high" || category.level === "critical" ? (
-                    <AlertTriangle className={`w-4 h-4 ${config.color}`} />
+                  {level === "high" || level === "critical" ? (
+                    <AlertTriangle className={`h-4 w-4 ${config.color}`} />
                   ) : (
-                    <div className={`w-2 h-2 rounded-full ${config.bg} ${config.border} border`} />
+                    <div
+                      className={`h-2 w-2 rounded-full border ${config.bg} ${config.border}`}
+                    />
                   )}
-                  <p className="text-sm">{category.name}</p>
+
+                  <p className="text-sm text-zinc-200">{category.name}</p>
                 </div>
-                <span className={`text-xs px-2 py-0.5 rounded ${config.bg} ${config.color} capitalize`}>
-                  {category.level}
+
+                <span
+                  className={`rounded px-2 py-0.5 text-xs capitalize ${config.bg} ${config.color}`}
+                >
+                  {level}
                 </span>
               </div>
-              <p className="text-xs text-zinc-500 leading-relaxed">{category.description}</p>
+
+              <p className="text-xs leading-relaxed text-zinc-500">
+                {category.description}
+              </p>
             </div>
           );
         })}

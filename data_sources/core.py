@@ -40,7 +40,7 @@ from urllib.request import Request, urlopen
 from uuid import uuid4
 
 from cache import PersistentCache
-from models import (
+from data_sources.models import (
     ConfidenceLabel,
     EXCLUDED_STATES,
     Port,

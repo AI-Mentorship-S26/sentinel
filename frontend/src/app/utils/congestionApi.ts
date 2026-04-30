@@ -10,7 +10,7 @@ export function scoreToLevel(score: number): PortData["congestion"]["level"] {
 export async function fetchCongestionScore(portName: string): Promise<number> {
   try {
     const response = await fetch(
-      `http://127.0.0.1:8000/predict/${encodeURIComponent(portName)}`
+      `http://127.0.0.1:8000/predict?port_name=${encodeURIComponent(portName)}`
     );
 
     if (!response.ok) {
