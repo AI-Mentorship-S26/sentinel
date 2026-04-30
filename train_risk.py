@@ -9,7 +9,7 @@ def train_sentinel_model():
     target_ports = [
         "Port of Charleston", "Port of Houston", "Port of Long Beach", 
         "Port of Los Angeles", "Port of Seattle", "Port of Oakland", 
-        "Port of New York", "Port of Savannah"
+        "Port of New York / New Jersey", "Port of Savannah", "Port of Virginia (Norfolk)"
     ]
     
     all_data_frames = []

@@ -48,9 +48,11 @@ def get_congestion_score(port_name: str):
 
         prediction = model.predict(port_data[FEATURE_COLUMNS])[0]
 
-        print("\n=== CONGESTION PREDICTION ===")
+        print("\n=== THROUGHPUT CONGESTION PREDICTION ===")
         print(f"Port: {port_name}")
-        # print(f"Predicted congestion score: {prediction:.6f}")
+        print(f"Predicted congestion score: {prediction:.2f}")
+        print("\n============= =============")
+
 
         return prediction
 

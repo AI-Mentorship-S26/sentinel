@@ -1,16 +1,32 @@
+from pathlib import Path
 import joblib
 import pandas as pd
 from sklearn.preprocessing import LabelEncoder
-from combined_data import get_combined_sentinel_data
+from data_sources.combined_data import get_combined_sentinel_data
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+MODEL_PATH = BASE_DIR / "sentinel_model.pkl"
+
+MODEL = None
 
 # 1. Load the Global Model
 try:
-    MODEL = joblib.load('sentinel_model.pkl')
+    MODEL = joblib.load(MODEL_PATH)
     print("✅ Sentinel Brain Loaded Successfully.")
 except Exception as e:
     print(f"❌ Error: sentinel_model.pkl not found or incompatible: {e}")
 
 def run_sentinel_assessment(port_name):
+    if MODEL is None:
+        return {
+            "port_name": port_name,
+            "overall_risk_level": "Low",
+            "risk_score_numeric": 0,
+            "vessels_tracked": 0,
+            "message": "Sentinel model not loaded."
+        }
+    
+    print("\n\n=== VESSEL CONGESTION PREDICTION ===")
     print(f"\n🕵️ Sentinel Aggregation active for: {port_name}")
     
     try:

@@ -2,11 +2,12 @@
 ports_config.py
 Loads port bounding boxes from ports.csv
 """
-
 import os
 import pandas as pd
+from pathlib import Path
 
-PORTS_CSV = "CSV_Files/ports.csv"
+BASE_DIR = Path(__file__).resolve().parent.parent
+PORTS_CSV = BASE_DIR / "data_sources" / "CSV_Files" / "ports.csv"
 
 def load_ports():
     return pd.read_csv(PORTS_CSV)
