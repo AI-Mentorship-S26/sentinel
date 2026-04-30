@@ -1,4 +1,5 @@
 from predict_congestion import get_congestion_score
+from predict_crime_score import predict_crime_score
 
 def get_final_port_score(port_name):
     scores = []
@@ -8,7 +9,7 @@ def get_final_port_score(port_name):
     scores.append(throughput_congestion_score)
 
     # Your models go here
-    # scores.append(predict_crime_score(port_name))
+    scores.append(predict_crime_score(port_name))
     # scores.append(predict_news_score(port_name))
 
     final_score = sum(scores) / len(scores)
