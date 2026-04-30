@@ -1,7 +1,7 @@
 import joblib
 import pandas as pd
 from sklearn.preprocessing import LabelEncoder
-from data_sources.combined_data import get_combined_sentinel_data
+from combined_data import get_combined_sentinel_data
 
 # 1. Load the Global Model
 try:
