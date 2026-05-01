@@ -54,7 +54,7 @@ def get_final_port_score(port_name):
         news_score = summary.get("port_score", 0) / 100  # Convert to 0.0-1.0 scale
     else:
         news_score = 0
-
+    print(f"News Score: {news_score} {type(news_score)}")
     scores.append(news_score)
 
 
@@ -83,7 +83,7 @@ def get_final_port_score(port_name):
         0.30 * ml_score +
         0.10 * crime_score +
         0.50 * satellite_score +
-        0.3 * news_score
+        0.30 * news_score
         
 )
 

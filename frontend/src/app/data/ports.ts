@@ -125,7 +125,7 @@ export const PORT_DATA: Record<string, PortData> = {
       },
     ],
     risks: {
-      overall: "moderate",
+      overall: "high",
       categories: [
         {
           name: "Security",

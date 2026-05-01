@@ -6,9 +6,14 @@ from typing import Any, Dict, List, Optional
 import pandas as pd
 import requests
 from dotenv import load_dotenv
+from pathlib import Path
 
 # load API key from .env
-load_dotenv()
+env_path = Path(__file__).resolve().parent / ".env"
+load_dotenv(env_path)
+
+# load API key from .env
+# load_dotenv()
 
 # ----------------------------
 # CONFIG
