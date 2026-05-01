@@ -22,7 +22,7 @@
   Open a new terminal for the backend to boot up
   - Ensure that you are in the root folder (sentinel/)
 
-  Run `python -m uvicorn api:app --reload`
+  Run `python -m uvicorn data_sources.api:app --reload`
   - This command will boot up the backend
 
   
