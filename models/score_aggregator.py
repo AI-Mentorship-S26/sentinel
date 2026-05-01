@@ -9,6 +9,7 @@ from predict_congestion import get_congestion_score
 from predict_crime_score import predict_crime_score
 from predict_risk import run_sentinel_assessment
 from ship_detection import detect_latest
+from portcongestion import score_port
 
 # Precompute satellite scores for all ports at startup
 _satellite_cache = {}
@@ -45,12 +46,25 @@ def get_final_port_score(port_name):
     scores.append(satellite_score)
     print("Satellite Score:", satellite_score, type(satellite_score))
 
+
+       # News Statistical Model 
+    _, _, _, summary = score_port(port_name)
+
+    if summary:
+        news_score = summary.get("port_score", 0) / 100  # Convert to 0.0-1.0 scale
+    else:
+        news_score = 0
+
+    scores.append(news_score)
+
+
     # Vessel Tracking Model
     ml_result = run_sentinel_assessment(port_name) or {}
     ml_score = ml_result.get("risk_score_numeric", 0) / 100
     scores.append(ml_score)
     print("Vessel result:", ml_result)
     print("Vessel score normalized:", ml_score)
+
 
         # ml_score = run_sentinel_assessment(port_name)
         # print("Vessel tracking score:", ml_score, type(ml_score))
@@ -68,7 +82,8 @@ def get_final_port_score(port_name):
         0.65 * throughput_congestion_score +
         0.30 * ml_score +
         0.10 * crime_score +
-        0.50 * satellite_score
+        0.50 * satellite_score +
+        0.3 * news_score
         
 )
 
