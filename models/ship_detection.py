@@ -4,6 +4,7 @@ Ship detection using YOLO (marine-vessel-yolo)
 """
 
 from ultralytics import YOLO
+from pathlib import Path
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import numpy as np
@@ -14,7 +15,10 @@ import torch
 
 MODEL_URL  = "https://huggingface.co/mayrajeo/marine-vessel-yolo/resolve/main/yolo11s_tci.pt"
 MODEL_FILE = "models/yolo11s_tci.pt"
-IMAGE_DIR  = "data_sources/satellite_images"
+IMAGE_DIR = str(Path(__file__).resolve().parent.parent / "data_sources" / "satellite_images")
+
+
+print("[CACHE] Starting preload...")
 
 os.makedirs("models", exist_ok=True)
 
@@ -50,7 +54,7 @@ def detect_ships(image_path, model):
 
     H, W = img.shape[:2]
     patch_size = 320
-    stride = 160
+    stride = 320
     all_boxes = []
 
     for y in range(0, H - patch_size, stride):

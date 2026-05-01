@@ -37,7 +37,7 @@ useEffect(() => {
   <ImageWithFallback
     src={imageUrl ?? port.satelliteImage}
     alt={`Satellite view of ${port.name}`}
-    className="w-full aspect-[16/10] object-cover"
+    className="w-full aspect-[16/10] object-cover scale-100 origin-center"
   />
 )}
       <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-zinc-950/95 via-zinc-950/60 to-transparent p-6 pt-20">
