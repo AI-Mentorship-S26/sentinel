@@ -23,7 +23,7 @@ def get_final_port_score(port_name):
     scores.append(crime_score)
 
     # Vessel Tracking Model
-    ml_result = run_sentinel_assessment(port_name)
+    ml_result = run_sentinel_assessment(port_name) or {}
     ml_score = ml_result.get("risk_score_numeric", 0) / 100
     scores.append(ml_score)
     print("Vessel result:", ml_result)
@@ -46,6 +46,3 @@ def get_final_port_score(port_name):
 
     # Rounding
     return round(final_score, 2)
-
-if __name__ == "__main__":
-    print(get_final_port_score("Port of Los Angeles"))

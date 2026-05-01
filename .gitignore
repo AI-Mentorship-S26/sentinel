@@ -18,6 +18,7 @@ data_sources/cargo_theft_all_years.csv
 data_sources/cargo_theft_port_relevant.csv
 data_sources/CSV Files/cargo_theft_all_years.csv
 data_sources/CSV Files/cargo_theft_port_relevant.csv
+app/data/query_cache.json
 .DS_Store
 .venv/
 
