@@ -24,9 +24,17 @@ export default function App() {
         percentage: Math.round(score * 100),
       });
     }
+  
 
     updateCongestion();
-  }, [selectedPort]);
+  }, [selectedPort]); 
+  
+  useEffect(() => {
+  Object.values(PORT_DATA).forEach((port) => {
+    const img = new Image();
+    img.src = `http://127.0.0.1:8000/image/${encodeURIComponent(port.name)}`;
+  }); 
+}, []);
 
   return (
     <div className="size-full bg-zinc-950 text-zinc-50 overflow-y-auto">

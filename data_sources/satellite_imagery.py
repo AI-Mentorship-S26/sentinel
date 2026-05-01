@@ -17,6 +17,7 @@ from ports_config import load_ports, get_port
 
 INSTANCE_ID = "8bfa6630-6f4a-4968-b260-7691ee655aa5"
 OUTPUT_DIR  = "data_sources/satellite_images/"
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 WMS_LAYER  = "TRUE_COLOR"
 IMG_WIDTH  = 2048
@@ -177,4 +178,5 @@ def get_all_ports_imagery():
 # -------------------------------
 
 if __name__ == "__main__":
-    get_realtime_image("Port of Houston")
+    clear_output_dir
+    get_all_ports_imagery()
