@@ -2,6 +2,8 @@
 ship_detection.py
 Ship detection using YOLO (marine-vessel-yolo)
 """
+import matplotlib
+matplotlib.use("Agg")
 
 from ultralytics import YOLO
 import matplotlib.pyplot as plt
